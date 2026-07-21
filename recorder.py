@@ -98,7 +98,7 @@ class VideoRecorder:
             return False
 
         self._record_name = nombre
-        self._record_dir = os.path.join(base_dir, nombre)
+        self._record_dir = base_dir
         os.makedirs(self._record_dir, exist_ok=True)
 
         self._video_path = os.path.join(self._record_dir, f"{nombre}{RECORD_EXT}")

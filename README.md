@@ -168,12 +168,11 @@ La ventana del receptor muestra:
 
 ## 📂 Estructura de Salida de la Grabación
 
-Al iniciar una grabación llamada `sesion_01`, se creará la siguiente estructura en la carpeta elegida:
+Al iniciar una grabación llamada `sesion_01_20260721_181248`, el video se guardará directamente en la carpeta elegida:
 
 ```text
 destino_seleccionado/
-└── sesion_01/
-    └── sesion_01.mkv    <-- Archivo único MKV Matroska (1540x960) con mosaico síncrono y metadatos esteganografiados
+└── sesion_01_20260721_181248.mkv    <-- Archivo único MKV Matroska (1540x960) con mosaico síncrono y metadatos esteganografiados
 ```
 
 > **Nota**: El sistema graba en formato **Matroska Container (`.mkv`)**. Cada frame del video contiene los metadatos de sincronización (`frame_id`, `timestamp_ns` y `channel_id`) **esteganografiados directamente dentro de los píxeles de la imagen**, sin necesidad de archivos `.csv` secundarios.
