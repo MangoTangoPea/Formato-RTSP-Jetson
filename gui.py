@@ -17,7 +17,7 @@ import numpy as np
 
 from utils import formatear_timestamp_ns
 from config import (
-    CAMERA_WIDTH, CAMERA_HEIGHT, PANEL_WIDTH,
+    CAMERA_WIDTH, CAMERA_HEIGHT, PANEL_HEIGHT,
     MOSAIC_WIDTH, MOSAIC_HEIGHT,
 )
 
@@ -83,108 +83,91 @@ class GUI:
     def _create_info_panel(
         self,
         telemetry: dict,
-        height: int,
+        width: int,
     ) -> np.ndarray:
         """
-        Dibuja el panel lateral izquierdo con información de telemetría.
+        Dibuja el panel superior horizontal (rectángulo) con información de telemetría y controles.
 
-        Replica el diseño de realsense_monitor_jetson.py con los datos
-        de la Jetson transmitidos por el emisor, ajustado al ancho amplio del panel.
+        Organiza la telemetría en 4 columnas perfectamente alineadas sobre las cámaras
+        con tipografía nítida de alta legibilidad e indicadores visuales.
 
         Parameters
         ----------
         telemetry : dict
-            Datos de telemetría del emisor (puede estar vacío).
-        height : int
-            Alto del panel en píxeles (debe coincidir con el mosaico).
+            Datos de telemetría del emisor.
+        width : int
+            Ancho completo del mosaico (coincide con el ancho de las cámaras, p.ej. 2560px).
 
         Returns
         -------
         np.ndarray
-            Imagen BGR de PANEL_WIDTH x height.
+            Imagen BGR de width x PANEL_HEIGHT.
         """
-        panel = np.full((height, PANEL_WIDTH, 3), COLOR_BG_DARK, dtype=np.uint8)
+        panel = np.full((PANEL_HEIGHT, width, 3), (25, 25, 25), dtype=np.uint8)
 
-        # Extraer datos de telemetría (con valores por defecto)
+        # Extraer datos de telemetría
         date_str = telemetry.get('date_str', '--/--/----')
         time_str = telemetry.get('time_str', '--:--:--')
-        resolution = telemetry.get('resolution', '---x---')
-        fps_config = telemetry.get('fps_config', '--')
+        resolution = telemetry.get('resolution', '1280x720')
+        fps_config = telemetry.get('fps_config', '30')
         asic_temp = telemetry.get('asic_temp')
         jetson_temps = telemetry.get('jetson_temps', {})
+        connected = bool(telemetry)
 
-        # Escalas y grosores optimizados para PANEL_WIDTH amplio
-        scale_title = 0.95
-        scale_section = 0.85
-        scale_text = 0.72
+        # Fuentes
+        font_bold = cv2.FONT_HERSHEY_DUPLEX
+        font_regular = cv2.FONT_HERSHEY_SIMPLEX
 
-        info_lines: list[tuple[str, tuple[int, int, int], float, int]] = []
-
-        # Título principal
-        info_lines.append(("Intel RealSense D435", COLOR_YELLOW, scale_title, 2))
-        info_lines.append(("__separator__", COLOR_GRAY, 0, 0))
-
-        # Información general de la cámara
-        info_lines.append((f"Fecha   {date_str}", COLOR_WHITE, scale_text, 1))
-        info_lines.append((f"Hora    {time_str}", COLOR_WHITE, scale_text, 1))
-        info_lines.append((f"Resol.  {resolution}", COLOR_WHITE, scale_text, 1))
-        info_lines.append((f"Config. {fps_config} FPS", COLOR_WHITE, scale_text, 1))
-
-        if asic_temp is not None:
-            info_lines.append((f"ASIC    {asic_temp:.1f} C", COLOR_WHITE, scale_text, 1))
-
-        # Separador
-        info_lines.append(("", COLOR_WHITE, scale_text, 1))
-
-        # Sección Hardware Jetson
-        info_lines.append(("Jetson Hardware", COLOR_YELLOW, scale_section, 2))
-
-        has_jetson_data = False
-        for label in ['CPU', 'GPU', 'SOC', 'Board']:
-            temp = jetson_temps.get(label)
-            if temp is not None:
-                info_lines.append((f"{label:<7} {temp:.1f} C", COLOR_WHITE, scale_text, 1))
-                has_jetson_data = True
-
-        if not has_jetson_data:
-            info_lines.append(("Sin datos termicos", (120, 120, 120), scale_text, 1))
-
-        # Separador
-        info_lines.append(("", COLOR_WHITE, scale_text, 1))
+        # ---------------------------------------------------------------------
+        # COLUMNA 1: DISPOSITIVO Y ESTADO (x = 30)
+        # ---------------------------------------------------------------------
+        cv2.putText(panel, "Intel RealSense D435", (30, 42), font_bold, 0.85, COLOR_YELLOW, 2, cv2.LINE_AA)
 
         # Estado de conexión
-        connected = bool(telemetry)
         status_color = COLOR_CONNECTED if connected else COLOR_DISCONNECTED
-        status_text = "Conectado" if connected else "Sin conexion"
-        info_lines.append((f"Estado: {status_text}", status_color, scale_text, 2))
+        status_text = "CONECTADO" if connected else "SIN CONEXION"
+        cv2.circle(panel, (42, 80), 9, status_color, -1, cv2.LINE_AA)
+        cv2.putText(panel, status_text, (62, 86), font_bold, 0.65, status_color, 2, cv2.LINE_AA)
 
-        # Separador
-        info_lines.append(("", COLOR_WHITE, scale_text, 1))
+        # Separador vertical 1
+        cv2.line(panel, (520, 15), (520, PANEL_HEIGHT - 15), COLOR_GRAY, 2)
 
-        # Sección Controles
-        info_lines.append(("Controles", COLOR_YELLOW, scale_section, 2))
-        info_lines.append(("[R] Iniciar REC", COLOR_WHITE, scale_text, 1))
-        info_lines.append(("[E] Detener REC", COLOR_WHITE, scale_text, 1))
-        info_lines.append(("[Q/ESC] Salir", COLOR_WHITE, scale_text, 1))
+        # ---------------------------------------------------------------------
+        # COLUMNA 2: FECHA, HORA Y RESOLUCIÓN (x = 550)
+        # ---------------------------------------------------------------------
+        cv2.putText(panel, f"Fecha: {date_str}   |   Hora: {time_str}", (550, 42), font_regular, 0.68, COLOR_WHITE, 2, cv2.LINE_AA)
+        cv2.putText(panel, f"Resol: {resolution}   |   Config: {fps_config} FPS", (550, 84), font_regular, 0.68, COLOR_WHITE, 2, cv2.LINE_AA)
 
-        # Dibujar elementos con espaciado vertical cómodo
-        y = 55
-        line_spacing = 42
+        # Separador vertical 2
+        cv2.line(panel, (1180, 15), (1180, PANEL_HEIGHT - 15), COLOR_GRAY, 2)
 
-        for text, color, scale, thickness in info_lines:
-            if text == "__separator__":
-                cv2.line(panel, (20, y), (PANEL_WIDTH - 20, y), COLOR_GRAY, 2)
-                y += 30
-            elif text == "":
-                y += 15
-            else:
-                cv2.putText(panel, text, (25, y), self.font, scale, color, thickness, cv2.LINE_AA)
-                y += line_spacing
+        # ---------------------------------------------------------------------
+        # COLUMNA 3: TELEMETRÍA HARDWARE JETSON (x = 1210)
+        # ---------------------------------------------------------------------
+        asic_str = f"{asic_temp:.1f} C" if asic_temp is not None else "-- C"
+        cv2.putText(panel, f"ASIC Temp: {asic_str}", (1210, 42), font_regular, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
 
-        # Indicador visual de estado (círculo)
-        indicator_y = y - line_spacing + 10
-        indicator_color = COLOR_CONNECTED if connected else COLOR_DISCONNECTED
-        cv2.circle(panel, (PANEL_WIDTH - 40, indicator_y - 8), 10, indicator_color, -1)
+        # Temperaturas Jetson
+        jetson_parts = []
+        for label in ['CPU', 'GPU', 'SOC', 'Board']:
+            t = jetson_temps.get(label)
+            if t is not None:
+                jetson_parts.append(f"{label}: {t:.1f}C")
+
+        jetson_str = " | ".join(jetson_parts) if jetson_parts else "Jetson: Sin datos termicos"
+        cv2.putText(panel, jetson_str, (1210, 84), font_regular, 0.62, COLOR_WHITE, 2, cv2.LINE_AA)
+
+        # Separador vertical 3
+        cv2.line(panel, (1880, 15), (1880, PANEL_HEIGHT - 15), COLOR_GRAY, 2)
+
+        # ---------------------------------------------------------------------
+        # COLUMNA 4: ATAJOS DE TECLADO / CONTROLES (x = 1910)
+        # ---------------------------------------------------------------------
+        cv2.putText(panel, "CONTROLES:", (1910, 40), font_bold, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
+        cv2.putText(panel, "[R] Grabar   [E] Detener   [Q] Salir", (1910, 84), font_bold, 0.65, COLOR_WHITE, 2, cv2.LINE_AA)
+
+        # Borde inferior del panel
+        cv2.line(panel, (0, PANEL_HEIGHT - 1), (width, PANEL_HEIGHT - 1), COLOR_GRAY, 2)
 
         return panel
 
@@ -197,23 +180,23 @@ class GUI:
         frame_id: Optional[int],
         timestamp_ns: Optional[int],
     ) -> None:
-        """Dibuja el título y HUD dinámico sobre un cuadrante."""
+        """Dibuja el título y HUD dinámico sobre un cuadrante con alta legibilidad."""
         h, w = img.shape[:2]
 
-        # Título en esquina superior izquierda (proporcional a resolución)
-        title_scale = 1.0 if w >= 1280 else 0.8
-        cv2.putText(img, title, (20, 45), self.font, title_scale, title_color, 2, cv2.LINE_AA)
+        # Título en esquina superior izquierda (fuente Duplex gruesa y clara)
+        title_scale = 1.1 if w >= 1280 else 0.8
+        cv2.putText(img, title, (25, 48), cv2.FONT_HERSHEY_DUPLEX, title_scale, title_color, 2, cv2.LINE_AA)
 
         # Información técnica al pie del cuadrante (dinámico según altura de imagen)
         ts_str = formatear_timestamp_ns(timestamp_ns)
         fid_str = f"FID: {frame_id}" if frame_id is not None else "FID: ---"
         fps_str = f"FPS: {fps:.1f}"
 
-        info_txt = f"{fid_str} | {ts_str} | {fps_str}"
-        info_scale = 0.62 if w >= 1280 else 0.45
+        info_txt = f"{fid_str}  |  {ts_str}  |  {fps_str}"
+        info_scale = 0.65 if w >= 1280 else 0.45
 
         # Posicionar dinámicamente a 25px del borde inferior
-        cv2.putText(img, info_txt, (20, h - 25), self.font, info_scale, (220, 220, 220), 1, cv2.LINE_AA)
+        cv2.putText(img, info_txt, (25, h - 25), cv2.FONT_HERSHEY_SIMPLEX, info_scale, (230, 230, 230), 2, cv2.LINE_AA)
 
     def build_mosaic(
         self,
@@ -223,7 +206,7 @@ class GUI:
         telemetry: dict,
     ) -> np.ndarray:
         """
-        Construye el mosaico completo a resolución nativa: panel amplio + cuadrícula 2x2.
+        Construye el mosaico completo a resolución nativa: panel superior (rectángulo) + cuadrícula 2x2.
 
         Este frame se usa tanto para la grabación como base para la visualización.
 
@@ -241,7 +224,7 @@ class GUI:
         Returns
         -------
         np.ndarray
-            Imagen BGR de MOSAIC_WIDTH x MOSAIC_HEIGHT (panel + mosaico).
+            Imagen BGR de MOSAIC_WIDTH x MOSAIC_HEIGHT (panel superior + mosaico 2x2).
         """
         processed: dict[str, np.ndarray] = {}
 
@@ -271,11 +254,11 @@ class GUI:
         bottom = np.hstack((processed['ir_left'], processed['ir_right']))
         video_grid = np.vstack((top, bottom))
 
-        # Panel de telemetría lateral amplio
-        panel = self._create_info_panel(telemetry, video_grid.shape[0])
+        # Panel de telemetría superior (rectángulo horizontal completo)
+        panel = self._create_info_panel(telemetry, video_grid.shape[1])
 
-        # Mosaico completo: panel | cuadrícula
-        return np.hstack((panel, video_grid))
+        # Mosaico completo: panel (arriba) + cuadrícula 2x2 (abajo)
+        return np.vstack((panel, video_grid))
 
     def render(
         self,

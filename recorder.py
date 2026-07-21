@@ -103,7 +103,7 @@ class VideoRecorder:
         self._record_dir = os.path.join(base_dir, nombre)
         os.makedirs(self._record_dir, exist_ok=True)
 
-        # Mosaico completo: panel (PANEL_WIDTH) + 2x2 cámaras = MOSAIC_WIDTH x MOSAIC_HEIGHT
+        # Mosaico completo: panel superior (PANEL_HEIGHT) + 2x2 cámaras = MOSAIC_WIDTH x MOSAIC_HEIGHT
         self._video_path = os.path.join(self._record_dir, f"{nombre}{RECORD_EXT}")
         fourcc = cv2.VideoWriter_fourcc(*self.codec)
         self._writer = cv2.VideoWriter(
