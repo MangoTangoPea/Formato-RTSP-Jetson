@@ -384,9 +384,11 @@ class GUI:
         Tuple[str, str] | None
             (directorio_base, nombre_grabacion) o None si el usuario canceló.
         """
-        default_name = f"grabacion_{datetime.datetime.now():%Y%m%d_%H%M%S}"
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"grabacion_{timestamp}"
 
         try:
+            import re
             import tkinter as tk
             from tkinter import filedialog, simpledialog
 
@@ -397,7 +399,7 @@ class GUI:
             # 1. Pedir nombre de la grabación
             name = simpledialog.askstring(
                 "Nombre de la Grabación",
-                "Ingrese el nombre para el archivo de grabación MP4:",
+                "Ingrese el nombre para el archivo de grabación:",
                 initialvalue=default_name,
                 parent=root
             )
@@ -407,10 +409,12 @@ class GUI:
                 return None
 
             name = name.strip()
+            if not re.search(r'_\d{8}(_\d{6})?$', name):
+                name = f"{name}_{timestamp}"
 
             # 2. Pedir carpeta de destino
             directory = filedialog.askdirectory(
-                title="Seleccione la carpeta donde guardar el video MP4",
+                title="Seleccione la carpeta donde guardar el video",
                 parent=root
             )
 
@@ -424,9 +428,13 @@ class GUI:
         except Exception:
             # Fallback por terminal si no hay GUI Tkinter
             try:
-                print("\n--- Configurar Grabación MP4 ---")
+                import re
+                print("\n--- Configurar Grabación ---")
                 name_in = input(f"Nombre de grabación [{default_name}]: ").strip()
                 name = name_in if name_in else default_name
+
+                if not re.search(r'_\d{8}(_\d{6})?$', name):
+                    name = f"{name}_{timestamp}"
 
                 import os
                 default_dir = os.path.abspath("./grabaciones")
