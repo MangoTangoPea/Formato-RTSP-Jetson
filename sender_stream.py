@@ -64,6 +64,7 @@ class VideoSender:
 
         # Socket de control (escucha registros)
         self._control_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._control_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._control_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
         self._control_socket.settimeout(1.0)
         self._control_socket.bind(("0.0.0.0", port_base + CONTROL_PORT_OFFSET))

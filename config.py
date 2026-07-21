@@ -38,7 +38,7 @@ CHANNEL_COLOR: int = 0
 CHANNEL_DEPTH: int = 1
 CHANNEL_IR_LEFT: int = 2
 CHANNEL_IR_RIGHT: int = 3
-CHANNEL_TELEMETRY: int = 10            # Canal de telemetría Jetson
+CHANNEL_TELEMETRY: int = 11            # Canal de telemetría Jetson (port_base + 11)
 
 CHANNELS: dict[int, str] = {
     CHANNEL_COLOR: 'color',
