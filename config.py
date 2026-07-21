@@ -71,8 +71,8 @@ JPEG_QUALITY: int = 88  # Calidad JPEG balanceada para 720p HD sin lag
 # GRABACIÓN
 # ===========================================================================
 
-RECORD_CODEC: str = 'bag'
-RECORD_EXT: str = '.bag'
+RECORD_CODEC: str = 'XVID'
+RECORD_EXT: str = '.mkv'
 RECORD_FPS: int = 30
 RECORD_BAG_DIR: str = 'recordings'
 
