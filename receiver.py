@@ -69,7 +69,7 @@ def main() -> None:
                 rec_info=recorder.info,
             )
 
-            # Escribir frame del mosaico si se está grabando y el paquete síncrono está completo
+            # Escribir frame del mosaico en formato .bag si se está grabando y el paquete síncrono está completo
             all_sync = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
             if recorder.recording and all_sync:
                 color_fid, color_ts = sync_info.get('color', (0, 0))
@@ -85,14 +85,14 @@ def main() -> None:
                 if info is not None:
                     base_dir, name = info
                     if recorder.start(base_dir, name):
-                        print(f"[REC] Grabacion iniciada: {name}.mp4 -> {base_dir}")
+                        print(f"[REC] Grabacion iniciada: {name}.bag -> {base_dir}")
                     else:
                         print("[ERROR] No se pudo iniciar la grabacion", file=sys.stderr)
 
             elif action == "stop_rec" and recorder.recording:
                 rec_name = recorder.record_name
                 recorder.stop()
-                print(f"[REC] Grabacion detenida: {rec_name}.mp4")
+                print(f"[REC] Grabacion detenida: {rec_name}.bag")
 
             elif action == "quit":
                 break

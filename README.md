@@ -20,7 +20,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 - **Grabación exclusiva en el Receptor**:
   - Se activa con `R` e interrumpe con `E`.
   - Cuadro de diálogo para **personalizar el nombre de la grabación** y seleccionar la carpeta destino.
-  - Guarda **un solo archivo de video `.mp4`** (1540×960, codec `mp4v`) con el panel de telemetría + mosaico completo de las 4 cámaras integradas, junto con su archivo `metadata.csv`.
+  - Guarda **un solo archivo de grabación `.bag`** (ROS Bag v2.0) con el panel de telemetría + mosaico completo de las 4 cámaras integradas a resolución 1540×960 y metadatos de sincronización esteganografiados en la imagen.
 - **Indicador visual de grabación**: Muestra un aviso de borde rojo y un círculo **REC** parpadeante en tiempo real en la GUI del receptor.
 - **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse. Si el emisor se desconecta, el emisor pausa el envío y espera automáticamente reconexión.
 - **Salida limpia en Emisor**: Logging mínimo sin mensajes largos e innecesarios.
@@ -173,13 +173,10 @@ Al iniciar una grabación llamada `sesion_01`, se creará la siguiente estructur
 ```text
 destino_seleccionado/
 └── sesion_01/
-    ├── sesion_01.mp4    <-- Video único MP4 (1540x960) con panel + mosaico de las 4 cámaras
-    └── metadata.csv     <-- Registro de sincronización y timestamps por frame
+    └── sesion_01.bag    <-- Archivo único ROS 1 Bag v2.0 (1540x960) con mosaico síncrono y metadatos esteganografiados
 ```
 
-El archivo `metadata.csv` registra por cada frame grabado: `frame_id`, `timestamp_ns` y `timestamp_utc`.
-
-> **Nota**: El video MP4 grabado incluye el panel de telemetría lateral, mostrando exactamente lo que se veía en la GUI del receptor al momento de la captura (temperaturas, fecha/hora, datos de la cámara).
+> **Nota**: El sistema graba directamente en formato **ROS 1 Bag (`.bag`)** en el tópico `/mosaic/compressed`. Cada frame incluye los metadatos de sincronización (`frame_id`, `timestamp_ns` y `channel_id`) **esteganografiados directamente dentro de los píxeles de la imagen**, sin necesidad de archivos `.csv` secundarios.
 
 ---
 
