@@ -83,6 +83,7 @@ class VideoReceiver:
             port = self.port_base + ch_id
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2097152)  # 2MB buffer
             sock.settimeout(1.0)
             sock.bind(("0.0.0.0", port))
@@ -100,6 +101,7 @@ class VideoReceiver:
         # Hilo de recepción de telemetría
         telemetry_port = self.port_base + CHANNEL_TELEMETRY
         telemetry_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        telemetry_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         telemetry_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
         telemetry_sock.settimeout(1.0)
         telemetry_sock.bind(("0.0.0.0", telemetry_port))
