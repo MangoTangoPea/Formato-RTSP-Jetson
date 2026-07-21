@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Visual Studio / IDEs
+.vscode/
+.idea/
+
+# Recorded sessions
+grabaciones/
+*.avi
+*.mkv
+*.mp4
+*.csv
+
+# OS generated
+.DS_Store
+Thumbs.db
