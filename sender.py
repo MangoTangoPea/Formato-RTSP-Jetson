@@ -11,9 +11,11 @@ Uso:
     python3 sender.py --port 1043
 """
 
+import os
 import sys
 import signal
 import time
+import datetime
 import argparse
 
 import cv2
@@ -25,7 +27,7 @@ from jetson_monitor import JetsonMonitor
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
     CHANNEL_COLOR, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT,
-    CONTROL_PORT_OFFSET, TELEMETRY_INTERVAL,
+    CONTROL_PORT_OFFSET, TELEMETRY_INTERVAL, RECORD_BAG_DIR,
 )
 
 # Flag para cierre limpio
@@ -63,6 +65,14 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Emisor RTP - RealSense D435")
     parser.add_argument("--port", type=int, default=UDP_PORT_BASE, help="Puerto UDP base")
+    parser.add_argument(
+        "--record-bag",
+        type=str,
+        nargs="?",
+        const="auto",
+        default=None,
+        help="Guardar grabación nativa de RealSense en formato .bag (ej. --record-bag o --record-bag mi_video.bag)",
+    )
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, _handle_signal)
@@ -72,8 +82,21 @@ def main() -> None:
     sender = None
     jetson = None
 
+    bag_path = None
+    if args.record_bag:
+        os.makedirs(RECORD_BAG_DIR, exist_ok=True)
+        if args.record_bag == "auto":
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            bag_path = os.path.join(RECORD_BAG_DIR, f"realsense_{ts}.bag")
+        else:
+            bag_path = args.record_bag
+            if not bag_path.endswith(".bag"):
+                bag_path += ".bag"
+            if not os.path.isabs(bag_path) and not os.path.dirname(bag_path):
+                bag_path = os.path.join(RECORD_BAG_DIR, bag_path)
+
     try:
-        camera = RealSenseCamera()
+        camera = RealSenseCamera(record_bag_path=bag_path)
         sender = VideoSender(port_base=args.port)
         jetson = JetsonMonitor()
 
@@ -82,6 +105,8 @@ def main() -> None:
         print(f"Emisor escuchando en puerto {args.port} "
               f"(control: {control_port}) | "
               f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
+        if bag_path:
+            print(f"Grabando en formato .bag (RealSense RAW): {bag_path}")
         print("Esperando receptor...")
 
         frame_id: int = 0

@@ -27,13 +27,16 @@ YELLOW=(0,255,255)
 GRAY=(70,70,70)
 
 class RealSenseCamera:
-    def __init__(self):
+    def __init__(self, record_bag_path: str = None):
         self.width=640
         self.height=480
         self.fps_config=30
 
         self.pipeline=rs.pipeline()
         self.config=rs.config()
+
+        if record_bag_path:
+            self.config.enable_record_to_file(record_bag_path)
 
         self.config.enable_stream(rs.stream.color,self.width,self.height,rs.format.bgr8,self.fps_config)
         self.config.enable_stream(rs.stream.depth,self.width,self.height,rs.format.z16,self.fps_config)

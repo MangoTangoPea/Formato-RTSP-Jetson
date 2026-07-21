@@ -77,6 +77,14 @@ Conecta la Intel RealSense D435 e inicia el emisor. **No necesita IP del recepto
 python3 sender.py
 ```
 
+*Grabar transmisión nativa en formato `.bag` (ROS/RealSense):*
+
+```bash
+python3 sender.py --record-bag
+# o indicando un nombre de archivo personalizado:
+python3 sender.py --record-bag mi_grabacion.bag
+```
+
 *Opcional: cambiar el puerto base UDP (por defecto es 1043):*
 
 ```bash

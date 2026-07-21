@@ -11,20 +11,23 @@ from config import CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS
 
 
 class RealSenseCamera:
-    def __init__(self):
+    def __init__(self, record_bag_path: str = None):
         self.width = CAMERA_WIDTH
         self.height = CAMERA_HEIGHT
         self.fps_config = CAMERA_FPS
 
-        self.pipeline=rs.pipeline()
-        self.config=rs.config()
+        self.pipeline = rs.pipeline()
+        self.config = rs.config()
 
-        self.config.enable_stream(rs.stream.color,self.width,self.height,rs.format.bgr8,self.fps_config)
-        self.config.enable_stream(rs.stream.depth,self.width,self.height,rs.format.z16,self.fps_config)
-        self.config.enable_stream(rs.stream.infrared,1,self.width,self.height,rs.format.y8,self.fps_config)
-        self.config.enable_stream(rs.stream.infrared,2,self.width,self.height,rs.format.y8,self.fps_config)
+        if record_bag_path:
+            self.config.enable_record_to_file(record_bag_path)
 
-        profile=self.pipeline.start(self.config)
+        self.config.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps_config)
+        self.config.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps_config)
+        self.config.enable_stream(rs.stream.infrared, 1, self.width, self.height, rs.format.y8, self.fps_config)
+        self.config.enable_stream(rs.stream.infrared, 2, self.width, self.height, rs.format.y8, self.fps_config)
+
+        profile = self.pipeline.start(self.config)
         self.depth_sensor=profile.get_device().first_depth_sensor()
         self.depth_sensor.set_option(rs.option.emitter_enabled,1)
 

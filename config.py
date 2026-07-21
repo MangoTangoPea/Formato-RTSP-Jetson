@@ -74,6 +74,7 @@ JPEG_QUALITY: int = 88  # Calidad JPEG balanceada para 720p HD sin lag
 RECORD_CODEC: str = 'mp4v'
 RECORD_EXT: str = '.mp4'
 RECORD_FPS: int = 30
+RECORD_BAG_DIR: str = 'recordings'
 
 # ===========================================================================
 # MOSAICO (panel + 4 cámaras en 2x2)
