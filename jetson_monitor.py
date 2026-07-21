@@ -9,7 +9,7 @@ de la Jetson (CPU, GPU, SOC, Board) desde sysfs.
 import glob
 import time
 import datetime
-from typing import Optional
+from config import CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS
 
 
 class JetsonMonitor:
@@ -98,7 +98,7 @@ class JetsonMonitor:
             'datetime': now.isoformat(),
             'date_str': now.strftime('%d/%m/%Y'),
             'time_str': now.strftime('%H:%M:%S'),
-            'resolution': f'{camera.width}x{camera.height}' if camera else '640x480',
-            'fps_config': camera.fps_config if camera else 30,
+            'resolution': f'{camera.width}x{camera.height}' if camera else f'{CAMERA_WIDTH}x{CAMERA_HEIGHT}',
+            'fps_config': camera.fps_config if camera else CAMERA_FPS,
             'timestamp': time.time(),
         }

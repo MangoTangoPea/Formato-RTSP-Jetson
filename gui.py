@@ -40,15 +40,15 @@ TITULOS_CANALES = {
 
 
 def crear_placeholder(width: int, height: int, texto: str) -> np.ndarray:
-    """Crea una imagen negra con texto centrado para canales no disponibles."""
-    img = np.zeros((height, width, 3), dtype=np.uint8)
+    """Crea una imagen de fondo oscuro con texto centrado para canales no disponibles."""
+    img = np.full((height, width, 3), COLOR_BG_DARK, dtype=np.uint8)
     font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 0.6
-    thickness = 1
+    scale = 0.85 if width >= 1280 else 0.60
+    thickness = 2 if width >= 1280 else 1
     size = cv2.getTextSize(texto, font, scale, thickness)[0]
     x = (width - size[0]) // 2
     y = (height + size[1]) // 2
-    cv2.putText(img, texto, (x, y), font, scale, (100, 100, 100), thickness, cv2.LINE_AA)
+    cv2.putText(img, texto, (x, y), font, scale, (140, 140, 140), thickness, cv2.LINE_AA)
     return img
 
 
@@ -56,7 +56,7 @@ class GUI:
     """
     Gestor de la interfaz gráfica responsive del Receptor.
 
-    Construye el mosaico a resolución nativa (1540x960) para grabación
+    Construye el mosaico a resolución nativa (panel + cuadrícula 2x2) para grabación
     y lo escala proporcionalmente al tamaño de la ventana para visualización.
 
     Parameters
@@ -66,15 +66,15 @@ class GUI:
     """
 
     # Resolución nativa del mosaico completo (panel + 4 cámaras)
-    NATIVE_W: int = MOSAIC_WIDTH    # 1540
-    NATIVE_H: int = MOSAIC_HEIGHT   # 960
-    BAR_HEIGHT_NATIVE: int = 25     # Barra de controles en resolución nativa
+    NATIVE_W: int = MOSAIC_WIDTH
+    NATIVE_H: int = MOSAIC_HEIGHT
+    BAR_HEIGHT_NATIVE: int = 35     # Barra de controles en resolución nativa
 
     def __init__(self, window_name: str = "Receptor RTP - RealSense D435") -> None:
         self.window_name = window_name
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
         cv2.resizeWindow(self.window_name, self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE)
 
     def _create_info_panel(
@@ -86,7 +86,7 @@ class GUI:
         Dibuja el panel lateral izquierdo con información de telemetría.
 
         Replica el diseño de realsense_monitor_jetson.py con los datos
-        de la Jetson transmitidos por el emisor.
+        de la Jetson transmitidos por el emisor, ajustado al ancho amplio del panel.
 
         Parameters
         ----------
@@ -100,7 +100,7 @@ class GUI:
         np.ndarray
             Imagen BGR de PANEL_WIDTH x height.
         """
-        panel = np.zeros((height, PANEL_WIDTH, 3), dtype=np.uint8)
+        panel = np.full((height, PANEL_WIDTH, 3), COLOR_BG_DARK, dtype=np.uint8)
 
         # Extraer datos de telemetría (con valores por defecto)
         date_str = telemetry.get('date_str', '--/--/----')
@@ -110,64 +110,69 @@ class GUI:
         asic_temp = telemetry.get('asic_temp')
         jetson_temps = telemetry.get('jetson_temps', {})
 
-        # Construir líneas de información
+        # Escalas y grosores optimizados para PANEL_WIDTH amplio
+        scale_title = 0.95
+        scale_section = 0.85
+        scale_text = 0.72
+
         info_lines: list[tuple[str, tuple[int, int, int], float, int]] = []
 
-        # Título (estilo especial)
-        info_lines.append(("Intel RealSense D435", COLOR_YELLOW, 0.60, 2))
+        # Título principal
+        info_lines.append(("Intel RealSense D435", COLOR_YELLOW, scale_title, 2))
         info_lines.append(("__separator__", COLOR_GRAY, 0, 0))
 
-        # Información general
-        info_lines.append((f"Fecha   {date_str}", COLOR_WHITE, 0.48, 1))
-        info_lines.append((f"Hora    {time_str}", COLOR_WHITE, 0.48, 1))
-        info_lines.append((f"Resol.  {resolution}", COLOR_WHITE, 0.48, 1))
-        info_lines.append((f"Config. {fps_config} FPS", COLOR_WHITE, 0.48, 1))
+        # Información general de la cámara
+        info_lines.append((f"Fecha   {date_str}", COLOR_WHITE, scale_text, 1))
+        info_lines.append((f"Hora    {time_str}", COLOR_WHITE, scale_text, 1))
+        info_lines.append((f"Resol.  {resolution}", COLOR_WHITE, scale_text, 1))
+        info_lines.append((f"Config. {fps_config} FPS", COLOR_WHITE, scale_text, 1))
 
-        # Temperatura ASIC
         if asic_temp is not None:
-            info_lines.append((f"ASIC    {asic_temp:.1f} C", COLOR_WHITE, 0.48, 1))
+            info_lines.append((f"ASIC    {asic_temp:.1f} C", COLOR_WHITE, scale_text, 1))
 
         # Separador
-        info_lines.append(("", COLOR_WHITE, 0.48, 1))
+        info_lines.append(("", COLOR_WHITE, scale_text, 1))
 
-        # Sección Jetson
-        info_lines.append(("Jetson", COLOR_YELLOW, 0.55, 2))
+        # Sección Hardware Jetson
+        info_lines.append(("Jetson Hardware", COLOR_YELLOW, scale_section, 2))
 
         has_jetson_data = False
         for label in ['CPU', 'GPU', 'SOC', 'Board']:
             temp = jetson_temps.get(label)
             if temp is not None:
-                info_lines.append((f"{label:<7} {temp:.1f} C", COLOR_WHITE, 0.48, 1))
+                info_lines.append((f"{label:<7} {temp:.1f} C", COLOR_WHITE, scale_text, 1))
                 has_jetson_data = True
 
         if not has_jetson_data:
-            info_lines.append(("Sin datos", (100, 100, 100), 0.45, 1))
+            info_lines.append(("Sin datos termicos", (120, 120, 120), scale_text, 1))
 
         # Separador
-        info_lines.append(("", COLOR_WHITE, 0.48, 1))
+        info_lines.append(("", COLOR_WHITE, scale_text, 1))
 
         # Estado de conexión
         connected = bool(telemetry)
         status_color = COLOR_CONNECTED if connected else COLOR_DISCONNECTED
         status_text = "Conectado" if connected else "Sin conexion"
-        info_lines.append((f"Estado: {status_text}", status_color, 0.48, 1))
+        info_lines.append((f"Estado: {status_text}", status_color, scale_text, 2))
 
-        # Dibujar
-        y = 30
+        # Dibujar elementos con espaciado vertical cómodo
+        y = 55
+        line_spacing = 42
+
         for text, color, scale, thickness in info_lines:
             if text == "__separator__":
-                cv2.line(panel, (10, y), (PANEL_WIDTH - 15, y), COLOR_GRAY, 1)
-                y += 20
+                cv2.line(panel, (20, y), (PANEL_WIDTH - 20, y), COLOR_GRAY, 2)
+                y += 30
             elif text == "":
-                y += 10
+                y += 15
             else:
-                cv2.putText(panel, text, (10, y), self.font, scale, color, thickness, cv2.LINE_AA)
-                y += 28
+                cv2.putText(panel, text, (25, y), self.font, scale, color, thickness, cv2.LINE_AA)
+                y += line_spacing
 
         # Indicador visual de estado (círculo)
-        indicator_y = y + 5
+        indicator_y = y - line_spacing + 10
         indicator_color = COLOR_CONNECTED if connected else COLOR_DISCONNECTED
-        cv2.circle(panel, (PANEL_WIDTH - 25, indicator_y - 5), 6, indicator_color, -1)
+        cv2.circle(panel, (PANEL_WIDTH - 40, indicator_y - 8), 10, indicator_color, -1)
 
         return panel
 
@@ -180,17 +185,23 @@ class GUI:
         frame_id: Optional[int],
         timestamp_ns: Optional[int],
     ) -> None:
-        """Dibuja el título y HUD sobre un cuadrante."""
-        # Título en esquina superior izquierda
-        cv2.putText(img, title, (15, 35), self.font, 0.9, title_color, 2, cv2.LINE_AA)
+        """Dibuja el título y HUD dinámico sobre un cuadrante."""
+        h, w = img.shape[:2]
 
-        # Información técnica en overlay semitransparente
+        # Título en esquina superior izquierda (proporcional a resolución)
+        title_scale = 1.0 if w >= 1280 else 0.8
+        cv2.putText(img, title, (20, 45), self.font, title_scale, title_color, 2, cv2.LINE_AA)
+
+        # Información técnica al pie del cuadrante (dinámico según altura de imagen)
         ts_str = formatear_timestamp_ns(timestamp_ns)
         fid_str = f"FID: {frame_id}" if frame_id is not None else "FID: ---"
         fps_str = f"FPS: {fps:.1f}"
 
         info_txt = f"{fid_str} | {ts_str} | {fps_str}"
-        cv2.putText(img, info_txt, (15, 460), self.font, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
+        info_scale = 0.62 if w >= 1280 else 0.45
+
+        # Posicionar dinámicamente a 25px del borde inferior
+        cv2.putText(img, info_txt, (20, h - 25), self.font, info_scale, (220, 220, 220), 1, cv2.LINE_AA)
 
     def build_mosaic(
         self,
@@ -200,10 +211,9 @@ class GUI:
         telemetry: dict,
     ) -> np.ndarray:
         """
-        Construye el mosaico completo a resolución nativa: panel + cuadrícula 2x2.
+        Construye el mosaico completo a resolución nativa: panel amplio + cuadrícula 2x2.
 
-        Este frame se usa tanto para la grabación (resolución nativa 1540x960)
-        como base para la visualización (se escala después).
+        Este frame se usa tanto para la grabación como base para la visualización.
 
         Parameters
         ----------
@@ -219,7 +229,7 @@ class GUI:
         Returns
         -------
         np.ndarray
-            Imagen BGR de 1540x960 (panel + mosaico).
+            Imagen BGR de MOSAIC_WIDTH x MOSAIC_HEIGHT (panel + mosaico).
         """
         processed: dict[str, np.ndarray] = {}
 
@@ -244,15 +254,15 @@ class GUI:
             self.draw_hud(img, title, color, fps, fid, ts)
             processed[ch_key] = img
 
-        # Mosaico 2x2 de las 4 cámaras (1280x960)
+        # Mosaico 2x2 de las 4 cámaras
         top = np.hstack((processed['color'], processed['depth']))
         bottom = np.hstack((processed['ir_left'], processed['ir_right']))
         video_grid = np.vstack((top, bottom))
 
-        # Panel de telemetría lateral (260x960)
+        # Panel de telemetría lateral amplio
         panel = self._create_info_panel(telemetry, video_grid.shape[0])
 
-        # Mosaico completo: panel | cuadrícula (1540x960)
+        # Mosaico completo: panel | cuadrícula
         return np.hstack((panel, video_grid))
 
     def render(
@@ -264,13 +274,13 @@ class GUI:
         """
         Renderiza el mosaico en pantalla con escalado responsive.
 
-        El mosaico nativo (1540x960) se escala al tamaño de la ventana
-        con interpolación de alta calidad, sin espacios blancos.
+        El mosaico nativo se escala al tamaño de la ventana
+        con interpolación de alta calidad y fondo oscuro sin bordes blancos.
 
         Parameters
         ----------
         mosaic : np.ndarray
-            Mosaico nativo de 1540x960 con panel integrado.
+            Mosaico nativo con panel integrado.
         recording : bool
             True si la grabación está activa.
         rec_info : str
@@ -287,7 +297,7 @@ class GUI:
             win_w, win_h = self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE
 
         # Calcular factor de escala para la barra de controles
-        bar_h_scaled = max(20, int(self.BAR_HEIGHT_NATIVE * (win_h / (self.NATIVE_H + self.BAR_HEIGHT_NATIVE))))
+        bar_h_scaled = max(25, int(self.BAR_HEIGHT_NATIVE * (win_h / (self.NATIVE_H + self.BAR_HEIGHT_NATIVE))))
 
         # Espacio disponible para el mosaico (ventana menos barra)
         avail_h = win_h - bar_h_scaled
@@ -297,7 +307,7 @@ class GUI:
             avail_h = win_h
             bar_h_scaled = 0
 
-        # Escalar mosaico manteniendo relación de aspecto y llenando todo el espacio
+        # Escalar mosaico manteniendo relación de aspecto
         src_h, src_w = mosaic.shape[:2]
         scale_w = avail_w / src_w
         scale_h = avail_h / src_h
@@ -314,8 +324,8 @@ class GUI:
 
         display_mosaic = cv2.resize(mosaic, (new_w, new_h), interpolation=interp)
 
-        # Crear canvas del tamaño exacto de la ventana (fondo negro, sin espacios blancos)
-        canvas = np.zeros((win_h, win_w, 3), dtype=np.uint8)
+        # Crear canvas del tamaño exacto de la ventana con fondo oscuro profesional (elimina recuadros blancos)
+        canvas = np.full((win_h, win_w, 3), COLOR_BG_DARK, dtype=np.uint8)
 
         # Centrar el mosaico escalado en el canvas
         offset_x = (avail_w - new_w) // 2
@@ -338,8 +348,8 @@ class GUI:
 
             # Círculo rojo parpadeante (alterna cada 0.5s)
             parpadeo = int(time.time() * 2) % 2 == 0
-            rec_x = offset_x + new_w - int(180 * scale)
-            rec_y = offset_y + int(30 * scale)
+            rec_x = offset_x + new_w - int(220 * scale)
+            rec_y = offset_y + int(35 * scale)
 
             if parpadeo:
                 cv2.circle(canvas, (rec_x, rec_y), max(5, int(10 * scale)), COLOR_RED, -1)
@@ -354,7 +364,7 @@ class GUI:
             if rec_info:
                 cv2.putText(
                     canvas, rec_info,
-                    (rec_x - int(220 * scale), rec_y + int(35 * scale)),
+                    (rec_x - int(240 * scale), rec_y + int(35 * scale)),
                     self.font, 0.45 * text_scale, COLOR_WHITE,
                     max(1, int(1 * text_scale)), cv2.LINE_AA
                 )
@@ -363,10 +373,10 @@ class GUI:
         if bar_h_scaled > 0:
             bar_y = win_h - bar_h_scaled
             controles_txt = "Controles: [R] Iniciar Grabacion  |  [E] Detener Grabacion  |  [Q / ESC] Salir"
-            font_scale_bar = max(0.35, 0.45 * text_scale)
+            font_scale_bar = max(0.38, 0.48 * text_scale)
             cv2.putText(
                 canvas, controles_txt,
-                (int(15 * scale), bar_y + int(bar_h_scaled * 0.7)),
+                (int(20 * scale), bar_y + int(bar_h_scaled * 0.7)),
                 self.font, font_scale_bar, COLOR_YELLOW,
                 max(1, int(1 * text_scale)), cv2.LINE_AA
             )

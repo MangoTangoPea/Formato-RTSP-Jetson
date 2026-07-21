@@ -65,7 +65,7 @@ CAMERA_FPS: int = 30
 # TRANSMISIÓN
 # ===========================================================================
 
-JPEG_QUALITY: int = 92  # Calidad JPEG superior para 720p HD
+JPEG_QUALITY: int = 88  # Calidad JPEG balanceada para 720p HD sin lag
 
 # ===========================================================================
 # GRABACIÓN
@@ -79,6 +79,6 @@ RECORD_FPS: int = 30
 # MOSAICO (panel + 4 cámaras en 2x2)
 # ===========================================================================
 
-PANEL_WIDTH: int = 260                  # Ancho del panel lateral de telemetría
-MOSAIC_WIDTH: int = CAMERA_WIDTH * 2 + PANEL_WIDTH   # 2820px para 720p
-MOSAIC_HEIGHT: int = CAMERA_HEIGHT * 2               # 1440px para 720p
+PANEL_WIDTH: int = 520                  # Ancho del panel lateral de telemetría (proporcional para 720p HD)
+MOSAIC_WIDTH: int = CAMERA_WIDTH * 2 + PANEL_WIDTH   # 3080px para 720p HD
+MOSAIC_HEIGHT: int = CAMERA_HEIGHT * 2               # 1440px para 720p HD
