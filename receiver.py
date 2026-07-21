@@ -8,7 +8,7 @@ lateral y gestiona la grabación local del mosaico completo como un solo archivo
 
 Uso:
     python3 receiver.py --ip 192.168.1.XX
-    python3 receiver.py --ip 192.168.1.XX --port 5000
+    python3 receiver.py --ip 192.168.1.XX --port 1043
 """
 
 import sys

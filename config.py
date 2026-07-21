@@ -12,7 +12,7 @@ import struct
 # PROTOCOLO UDP
 # ===========================================================================
 
-UDP_PORT_BASE: int = 5000
+UDP_PORT_BASE: int = 1043
 PACKET_MAGIC: bytes = b'RS4C'
 
 # Header: magic(4) + frame_id(4) + timestamp_ns(8) + channel(1) +

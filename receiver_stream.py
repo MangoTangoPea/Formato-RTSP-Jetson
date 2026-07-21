@@ -22,6 +22,7 @@ from config import (
     PACKET_MAGIC, HEADER_FORMAT, HEADER_SIZE, MAX_UDP_PAYLOAD,
     CHANNELS, CHANNEL_TELEMETRY,
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_INTERVAL,
+    UDP_PORT_BASE,
 )
 
 
@@ -44,7 +45,7 @@ class VideoReceiver:
     # Timeout para descartar frames incompletos (segundos)
     _FRAGMENT_TIMEOUT: float = 0.15
 
-    def __init__(self, sender_ip: str, port_base: int = 5000) -> None:
+    def __init__(self, sender_ip: str, port_base: int = UDP_PORT_BASE) -> None:
         self.sender_ip = sender_ip
         self.port_base = port_base
         self._running: bool = False

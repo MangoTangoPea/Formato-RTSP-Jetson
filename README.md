@@ -77,22 +77,22 @@ Conecta la Intel RealSense D435 e inicia el emisor. **No necesita IP del recepto
 python3 sender.py
 ```
 
-*Opcional: cambiar el puerto base UDP (por defecto es 5000):*
+*Opcional: cambiar el puerto base UDP (por defecto es 1043):*
 
 ```bash
-python3 sender.py --port 5000
+python3 sender.py --port 1043
 ```
 
 El emisor mostrará:
 ```text
-Emisor escuchando en puerto 5000 (control: 5010) | 640×480 @ 30fps
+Emisor escuchando en puerto 1043 (control: 1053) | 640×480 @ 30fps
 Esperando receptor...
 ```
 
 Cuando un receptor se conecte:
 ```text
 Receptor registrado: 192.168.1.50
-Emisor → 192.168.1.50:5000 | 640×480 @ 30fps
+Emisor → 192.168.1.50:1043 | 640×480 @ 30fps
 ```
 
 ---
@@ -108,7 +108,7 @@ python3 receiver.py --ip 192.168.1.XX
 *Si cambiaste el puerto en el emisor, especifícalo aquí también:*
 
 ```bash
-python3 receiver.py --ip 192.168.1.XX --port 5000
+python3 receiver.py --ip 192.168.1.XX --port 1043
 ```
 
 ---

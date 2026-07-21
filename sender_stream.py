@@ -22,6 +22,7 @@ from config import (
     PACKET_MAGIC, HEADER_FORMAT, HEADER_SIZE, MAX_UDP_PAYLOAD,
     JPEG_QUALITY, CHANNELS, CHANNEL_TELEMETRY,
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_TIMEOUT,
+    UDP_PORT_BASE,
 )
 
 
@@ -40,7 +41,7 @@ class VideoSender:
         El puerto de control es port_base + CONTROL_PORT_OFFSET.
     """
 
-    def __init__(self, port_base: int = 5000) -> None:
+    def __init__(self, port_base: int = UDP_PORT_BASE) -> None:
         self.port_base = port_base
 
         # Dirección del receptor registrado

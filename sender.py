@@ -8,7 +8,7 @@ de control antes de comenzar a transmitir.
 
 Uso:
     python3 sender.py
-    python3 sender.py --port 5000
+    python3 sender.py --port 1043
 """
 
 import sys
