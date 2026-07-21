@@ -10,8 +10,21 @@ venv/
 .vscode/
 .idea/
 
-# Recorded sessions
-grabaciones/
+# Recorded sessions (keep structure C, IA, II, IR in Git, ignore video contents)
+grabaciones/*
+!grabaciones/C/
+!grabaciones/IA/
+!grabaciones/II/
+!grabaciones/IR/
+grabaciones/C/*
+!grabaciones/C/.gitkeep
+grabaciones/IA/*
+!grabaciones/IA/.gitkeep
+grabaciones/II/*
+!grabaciones/II/.gitkeep
+grabaciones/IR/*
+!grabaciones/IR/.gitkeep
+
 *.avi
 *.mkv
 *.mp4
