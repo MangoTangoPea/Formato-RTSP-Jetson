@@ -149,12 +149,11 @@ class GUI:
 
         # Temperaturas Jetson
         jetson_parts = []
-        for label in ['CPU', 'GPU', 'SOC', 'Board']:
-            t = jetson_temps.get(label)
+        for label, t in jetson_temps.items():
             if t is not None:
                 jetson_parts.append(f"{label}: {t:.1f}C")
 
-        jetson_str = " | ".join(jetson_parts) if jetson_parts else "Jetson: Sin datos termicos"
+        jetson_str = " | ".join(jetson_parts) if jetson_parts else "Jetson: Esperando telemetria..."
         cv2.putText(panel, jetson_str, (1210, 84), font_regular, 0.62, COLOR_WHITE, 2, cv2.LINE_AA)
 
         # Separador vertical 3
@@ -180,23 +179,55 @@ class GUI:
         frame_id: Optional[int],
         timestamp_ns: Optional[int],
     ) -> None:
-        """Dibuja el título y HUD dinámico sobre un cuadrante con alta legibilidad."""
+        """
+        Dibuja el título y HUD dinámico sobre cada cámara con badge oscuro de contraste para máxima legibilidad.
+        """
         h, w = img.shape[:2]
+        font_title = cv2.FONT_HERSHEY_DUPLEX
+        font_info = cv2.FONT_HERSHEY_SIMPLEX
 
-        # Título en esquina superior izquierda (fuente Duplex gruesa y clara)
-        title_scale = 1.1 if w >= 1280 else 0.8
-        cv2.putText(img, title, (25, 48), cv2.FONT_HERSHEY_DUPLEX, title_scale, title_color, 2, cv2.LINE_AA)
+        # --- 1. TÍTULO DE CÁMARA (Esquina Superior Izquierda) ---
+        title_scale = 1.0 if w >= 1280 else 0.8
+        title_thickness = 2
+        (title_w, title_h), baseline = cv2.getTextSize(title, font_title, title_scale, title_thickness)
 
-        # Información técnica al pie del cuadrante (dinámico según altura de imagen)
+        pad_x, pad_y = 12, 10
+        top_left = (15, 12)
+        bottom_right = (15 + title_w + 2 * pad_x, 12 + title_h + 2 * pad_y)
+
+        # Fondo oscuro y borde del badge de título
+        cv2.rectangle(img, top_left, bottom_right, (15, 15, 15), -1)
+        cv2.rectangle(img, top_left, bottom_right, (60, 60, 60), 1)
+
+        # Texto del título
+        cv2.putText(
+            img, title, (15 + pad_x, 12 + pad_y + title_h),
+            font_title, title_scale, title_color, title_thickness, cv2.LINE_AA
+        )
+
+        # --- 2. INFORMACIÓN TÉCNICA (Pie del cuadrante: FID | TS | FPS) ---
         ts_str = formatear_timestamp_ns(timestamp_ns)
         fid_str = f"FID: {frame_id}" if frame_id is not None else "FID: ---"
         fps_str = f"FPS: {fps:.1f}"
+        info_txt = f"{fid_str}   |   {ts_str}   |   {fps_str}"
 
-        info_txt = f"{fid_str}  |  {ts_str}  |  {fps_str}"
-        info_scale = 0.65 if w >= 1280 else 0.45
+        info_scale = 0.62 if w >= 1280 else 0.45
+        info_thickness = 2
+        (info_w, info_h), baseline_info = cv2.getTextSize(info_txt, font_info, info_scale, info_thickness)
 
-        # Posicionar dinámicamente a 25px del borde inferior
-        cv2.putText(img, info_txt, (25, h - 25), cv2.FONT_HERSHEY_SIMPLEX, info_scale, (230, 230, 230), 2, cv2.LINE_AA)
+        info_pad_x, info_pad_y = 12, 8
+        info_top_left = (15, h - info_h - 2 * info_pad_y - 12)
+        info_bottom_right = (15 + info_w + 2 * info_pad_x, h - 12)
+
+        # Fondo oscuro y borde del badge de HUD
+        cv2.rectangle(img, info_top_left, info_bottom_right, (15, 15, 15), -1)
+        cv2.rectangle(img, info_top_left, info_bottom_right, (60, 60, 60), 1)
+
+        # Texto HUD al pie
+        cv2.putText(
+            img, info_txt, (15 + info_pad_x, h - 12 - info_pad_y),
+            font_info, info_scale, (240, 240, 240), info_thickness, cv2.LINE_AA
+        )
 
     def build_mosaic(
         self,
