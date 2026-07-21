@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-VideoRecorder — Grabación del mosaico 2x2 en un solo archivo MP4.
+VideoRecorder — Grabación del mosaico completo (panel + 2x2) en un solo archivo MP4.
 
-Graba los 4 canales combinados en una sola toma de 1280x960 como un archivo .mp4
-independiente con el codec mp4v (MPEG-4), acompañado de su archivo metadata.csv.
+Graba los 4 canales combinados con el panel de telemetría como una sola
+toma de 1540x960 en un archivo .mp4 independiente con el codec mp4v (MPEG-4),
+acompañado de su archivo metadata.csv.
 La escritura ocurre en un hilo dedicado para no bloquear la visualización.
 """
 
@@ -17,12 +18,12 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from config import RECORD_CODEC, RECORD_EXT, RECORD_FPS, CAMERA_WIDTH, CAMERA_HEIGHT
+from config import RECORD_CODEC, RECORD_EXT, RECORD_FPS, MOSAIC_WIDTH, MOSAIC_HEIGHT
 
 
 class VideoRecorder:
     """
-    Graba el mosaico 2x2 de los 4 canales en un único archivo MP4.
+    Graba el mosaico completo (panel + 4 canales) en un único archivo MP4.
 
     Parameters
     ----------
@@ -81,7 +82,7 @@ class VideoRecorder:
 
     def start(self, base_dir: str, nombre: str) -> bool:
         """
-        Inicia la grabación del mosaico.
+        Inicia la grabación del mosaico completo.
 
         Parameters
         ----------
@@ -102,14 +103,11 @@ class VideoRecorder:
         self._record_dir = os.path.join(base_dir, nombre)
         os.makedirs(self._record_dir, exist_ok=True)
 
-        # Mosaico de 2x2 cámaras (640x2 = 1280, 480x2 = 960)
-        mosaic_width = CAMERA_WIDTH * 2
-        mosaic_height = CAMERA_HEIGHT * 2
-
+        # Mosaico completo: panel (260px) + 2x2 cámaras (1280px) = 1540x960
         self._video_path = os.path.join(self._record_dir, f"{nombre}{RECORD_EXT}")
         fourcc = cv2.VideoWriter_fourcc(*self.codec)
         self._writer = cv2.VideoWriter(
-            self._video_path, fourcc, self.fps, (mosaic_width, mosaic_height)
+            self._video_path, fourcc, self.fps, (MOSAIC_WIDTH, MOSAIC_HEIGHT)
         )
 
         if not self._writer.isOpened():
@@ -143,12 +141,12 @@ class VideoRecorder:
         timestamp_ns: int,
     ) -> None:
         """
-        Encola el frame del mosaico para escritura asíncrona.
+        Encola el frame del mosaico completo para escritura asíncrona.
 
         Parameters
         ----------
         mosaic_frame : np.ndarray
-            Imagen BGR de 1280x960 con las 4 cámaras integradas.
+            Imagen BGR de 1540x960 con panel de telemetría + 4 cámaras.
         frame_id : int
             Número del frame.
         timestamp_ns : int
@@ -170,6 +168,9 @@ class VideoRecorder:
             frame, frame_id, timestamp_ns = item
 
             if self._writer is not None and self._writer.isOpened():
+                # Asegurar tamaño correcto para el VideoWriter
+                if frame.shape[:2] != (MOSAIC_HEIGHT, MOSAIC_WIDTH):
+                    frame = cv2.resize(frame, (MOSAIC_WIDTH, MOSAIC_HEIGHT), interpolation=cv2.INTER_AREA)
                 self._writer.write(frame)
 
             # Escribir metadatos

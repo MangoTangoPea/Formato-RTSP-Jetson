@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-VideoReceiver — Recepción de frames por UDP.
+VideoReceiver — Recepción de frames por UDP con registro automático.
 
-Escucha en 4 puertos UDP (uno por canal), ensambla fragmentos,
-decodifica JPEG, y mantiene el frame más reciente de cada canal
-en un buffer thread-safe.
+Se registra con el emisor enviando heartbeats periódicos.
+Escucha en 4 puertos UDP (uno por canal) + 1 puerto de telemetría,
+ensambla fragmentos, decodifica JPEG, y mantiene el frame más
+reciente de cada canal en un buffer thread-safe.
 """
 
+import json
 import socket
 import struct
 import time
@@ -18,7 +20,8 @@ import numpy as np
 
 from config import (
     PACKET_MAGIC, HEADER_FORMAT, HEADER_SIZE, MAX_UDP_PAYLOAD,
-    CHANNELS,
+    CHANNELS, CHANNEL_TELEMETRY,
+    CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_INTERVAL,
 )
 
 
@@ -26,11 +29,14 @@ class VideoReceiver:
     """
     Recibe frames de 4 canales RealSense por UDP.
 
-    Cada canal tiene un hilo de recepción dedicado. Los frames se
-    decodifican y almacenan en un buffer thread-safe.
+    Envía heartbeats al emisor para registrarse. Cada canal tiene
+    un hilo de recepción dedicado. Los frames se decodifican y
+    almacenan en un buffer thread-safe.
 
     Parameters
     ----------
+    sender_ip : str
+        IP del emisor al que conectarse.
     port_base : int
         Puerto base UDP. Los canales escuchan en port_base + channel_id.
     """
@@ -38,7 +44,8 @@ class VideoReceiver:
     # Timeout para descartar frames incompletos (segundos)
     _FRAGMENT_TIMEOUT: float = 0.15
 
-    def __init__(self, port_base: int = 5000) -> None:
+    def __init__(self, sender_ip: str, port_base: int = 5000) -> None:
+        self.sender_ip = sender_ip
         self.port_base = port_base
         self._running: bool = False
 
@@ -56,18 +63,27 @@ class VideoReceiver:
         self._fps_timers: dict[int, float] = {ch: time.time() for ch in CHANNELS}
         self._last_frame_id: dict[int, int] = {ch: 0 for ch in CHANNELS}
 
+        # Telemetría del emisor
+        self._telemetry: dict = {}
+        self._telemetry_lock = threading.Lock()
+
         # Sockets y hilos
         self._sockets: dict[int, socket.socket] = {}
-        self._threads: dict[int, threading.Thread] = {}
+        self._threads: dict[str, threading.Thread] = {}
+
+        # Socket para heartbeat
+        self._heartbeat_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     def start(self) -> None:
-        """Inicia la recepción en los 4 canales."""
+        """Inicia la recepción en los 4 canales + telemetría + heartbeat."""
         self._running = True
 
+        # Hilos de recepción de canales de video
         for ch_id in CHANNELS:
             port = self.port_base + ch_id
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2097152)  # 2MB buffer
             sock.settimeout(1.0)
             sock.bind(("0.0.0.0", port))
@@ -79,8 +95,87 @@ class VideoReceiver:
                 name=f"Receiver-{CHANNELS[ch_id]}",
                 daemon=True,
             )
-            self._threads[ch_id] = thread
+            self._threads[f"video_{ch_id}"] = thread
             thread.start()
+
+        # Hilo de recepción de telemetría
+        telemetry_port = self.port_base + CHANNEL_TELEMETRY
+        telemetry_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        telemetry_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        telemetry_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+        telemetry_sock.settimeout(1.0)
+        telemetry_sock.bind(("0.0.0.0", telemetry_port))
+        self._sockets[CHANNEL_TELEMETRY] = telemetry_sock
+
+        telemetry_thread = threading.Thread(
+            target=self._telemetry_loop,
+            name="Receiver-Telemetry",
+            daemon=True,
+        )
+        self._threads["telemetry"] = telemetry_thread
+        telemetry_thread.start()
+
+        # Hilo de heartbeat (registro periódico)
+        heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name="Receiver-Heartbeat",
+            daemon=True,
+        )
+        self._threads["heartbeat"] = heartbeat_thread
+        heartbeat_thread.start()
+
+    def _heartbeat_loop(self) -> None:
+        """Envía paquetes de registro al emisor periódicamente."""
+        control_port = self.port_base + CONTROL_PORT_OFFSET
+        dest = (self.sender_ip, control_port)
+
+        while self._running:
+            try:
+                self._heartbeat_socket.sendto(REGISTER_MAGIC, dest)
+            except OSError:
+                pass
+
+            # Dormir en intervalos cortos para responder rápido al cierre
+            elapsed = 0.0
+            while self._running and elapsed < HEARTBEAT_INTERVAL:
+                time.sleep(0.2)
+                elapsed += 0.2
+
+    def _telemetry_loop(self) -> None:
+        """Recibe paquetes de telemetría del emisor."""
+        sock = self._sockets[CHANNEL_TELEMETRY]
+
+        while self._running:
+            try:
+                packet, _ = sock.recvfrom(HEADER_SIZE + 8192)
+            except socket.timeout:
+                continue
+            except OSError:
+                if not self._running:
+                    break
+                continue
+
+            if len(packet) < HEADER_SIZE:
+                continue
+
+            try:
+                (magic, _, _, ch_id, _, _, _, data_len, _) = struct.unpack(
+                    HEADER_FORMAT, packet[:HEADER_SIZE]
+                )
+            except struct.error:
+                continue
+
+            if magic != PACKET_MAGIC or ch_id != CHANNEL_TELEMETRY:
+                continue
+
+            payload = packet[HEADER_SIZE:HEADER_SIZE + data_len]
+
+            try:
+                telemetry = json.loads(payload.decode('utf-8'))
+                with self._telemetry_lock:
+                    self._telemetry = telemetry
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
 
     def _receive_loop(self, channel_id: int) -> None:
         """
@@ -236,6 +331,18 @@ class VideoReceiver:
                 }
         return result
 
+    def get_telemetry(self) -> dict:
+        """
+        Retorna los datos de telemetría más recientes del emisor.
+
+        Returns
+        -------
+        dict
+            Datos de telemetría o diccionario vacío si no se han recibido.
+        """
+        with self._telemetry_lock:
+            return self._telemetry.copy()
+
     @property
     def connected(self) -> bool:
         """True si al menos un canal ha recibido datos."""
@@ -256,6 +363,11 @@ class VideoReceiver:
                 sock.close()
             except Exception:
                 pass
+
+        try:
+            self._heartbeat_socket.close()
+        except Exception:
+            pass
 
         self._sockets.clear()
         self._threads.clear()
