@@ -22,6 +22,15 @@ HEADER_SIZE: int = struct.calcsize(HEADER_FORMAT)  # 32 bytes
 MAX_UDP_PAYLOAD: int = 60000  # bytes por fragmento
 
 # ===========================================================================
+# REGISTRO Y CONTROL (Receptor → Emisor)
+# ===========================================================================
+
+CONTROL_PORT_OFFSET: int = 10          # Puerto de control = port_base + 10
+REGISTER_MAGIC: bytes = b'RGRQ'       # Magic para paquetes de registro
+HEARTBEAT_INTERVAL: float = 2.0       # Segundos entre heartbeats del receptor
+HEARTBEAT_TIMEOUT: float = 6.0        # Segundos sin heartbeat → pausa envío
+
+# ===========================================================================
 # CANALES
 # ===========================================================================
 
@@ -29,6 +38,7 @@ CHANNEL_COLOR: int = 0
 CHANNEL_DEPTH: int = 1
 CHANNEL_IR_LEFT: int = 2
 CHANNEL_IR_RIGHT: int = 3
+CHANNEL_TELEMETRY: int = 10            # Canal de telemetría Jetson
 
 CHANNELS: dict[int, str] = {
     CHANNEL_COLOR: 'color',
@@ -36,6 +46,12 @@ CHANNELS: dict[int, str] = {
     CHANNEL_IR_LEFT: 'ir_left',
     CHANNEL_IR_RIGHT: 'ir_right',
 }
+
+# ===========================================================================
+# TELEMETRÍA
+# ===========================================================================
+
+TELEMETRY_INTERVAL: float = 1.0        # Segundos entre paquetes de telemetría
 
 # ===========================================================================
 # CÁMARA (refleja RealSenseCamera — NO modificar)
@@ -58,3 +74,11 @@ JPEG_QUALITY: int = 85  # calidad JPEG para transmisión
 RECORD_CODEC: str = 'mp4v'
 RECORD_EXT: str = '.mp4'
 RECORD_FPS: int = 30
+
+# ===========================================================================
+# MOSAICO (panel + 4 cámaras en 2x2)
+# ===========================================================================
+
+PANEL_WIDTH: int = 260                  # Ancho del panel lateral de telemetría
+MOSAIC_WIDTH: int = CAMERA_WIDTH * 2 + PANEL_WIDTH   # 1540
+MOSAIC_HEIGHT: int = CAMERA_HEIGHT * 2               # 960

@@ -12,13 +12,17 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
   2. Profundidad (Depth Heatmap JET)
   3. Infrarrojo Izquierdo (IR Left)
   4. Infrarrojo Derecho (IR Right)
+- **Registro automático**: El Receptor se registra con el Emisor mediante heartbeats UDP. El Emisor no necesita conocer la IP del receptor de antemano.
+- **Telemetría Jetson en tiempo real**: El emisor transmite las temperaturas de hardware de la Jetson (CPU, GPU, SOC, Board), temperatura ASIC de la cámara, fecha, hora y configuración de la cámara.
+- **Panel lateral de información**: El receptor muestra un panel lateral izquierdo (260px) con toda la telemetría del emisor, replicando el estilo de `realsense_monitor_jetson.py`.
+- **Interfaz responsive**: La ventana es completamente redimensionable y maximizable. El contenido se escala proporcionalmente sin espacios blancos, sin pérdida de calidad de imagen y con texto legible a cualquier tamaño.
 - **Metadatos de sincronización**: Cada paquete transporta `frame_id`, `timestamp_ns` y `channel_id` en una cabecera binaria de 32 bytes para evitar desfases entre canales.
 - **Grabación exclusiva en el Receptor**:
   - Se activa con `R` e interrumpe con `E`.
   - Cuadro de diálogo para **personalizar el nombre de la grabación** y seleccionar la carpeta destino.
-  - Guarda **un solo archivo de video `.mp4`** (1280x960, codec `mp4v`) con el mosaico completo de las 4 cámaras integradas, junto con su archivo `metadata.csv`.
+  - Guarda **un solo archivo de video `.mp4`** (1540×960, codec `mp4v`) con el panel de telemetría + mosaico completo de las 4 cámaras integradas, junto con su archivo `metadata.csv`.
 - **Indicador visual de grabación**: Muestra un aviso de borde rojo y un círculo **REC** parpadeante en tiempo real en la GUI del receptor.
-- **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse y espera automáticamente si el emisor se desconecta o reinicia.
+- **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse. Si el emisor se desconecta, el emisor pausa el envío y espera automáticamente reconexión.
 - **Salida limpia en Emisor**: Logging mínimo sin mensajes largos e innecesarios.
 
 ---
@@ -27,17 +31,19 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 
 ```
 .
-├── camera.py           # Conexión RealSense D435 (RealSenseCamera, sin modificar)
-├── config.py           # Constantes del protocolo, red, cámara y grabación
-├── utils.py            # Funciones auxiliares de red y formato de timestamps
-├── sender_stream.py    # Clase VideoSender (compresión, cabeceras y sockets UDP)
-├── sender.py           # Programa principal del Emisor
-├── receiver_stream.py  # Clase VideoReceiver (recolección, ensamble UDP y decodificación)
-├── recorder.py         # Clase VideoRecorder (escritura asíncrona multicanal en disco)
-├── gui.py              # Clase GUI (mosaico 2x2, HUD, indicador REC y cuadros diálogo Tkinter)
-├── receiver.py         # Programa principal del Receptor
-├── requirements.txt    # Dependencias de Python
-└── README.md           # Documentación del proyecto
+├── camera.py                    # Conexión RealSense D435 (RealSenseCamera, sin modificar)
+├── config.py                    # Constantes del protocolo, red, cámara, telemetría y grabación
+├── utils.py                     # Funciones auxiliares de red y formato de timestamps
+├── jetson_monitor.py            # Monitoreo de temperaturas Jetson (CPU, GPU, SOC, Board)
+├── sender_stream.py             # Clase VideoSender (registro dinámico, compresión, cabeceras UDP)
+├── sender.py                    # Programa principal del Emisor
+├── receiver_stream.py           # Clase VideoReceiver (heartbeat, ensamble UDP, telemetría)
+├── recorder.py                  # Clase VideoRecorder (escritura asíncrona del mosaico completo)
+├── gui.py                       # Clase GUI (panel telemetría, mosaico 2x2, responsive, HUD, REC)
+├── receiver.py                  # Programa principal del Receptor
+├── realsense_monitor_jetson.py  # Monitor local original (referencia, no modificado)
+├── requirements.txt             # Dependencias de Python
+└── README.md                    # Documentación del proyecto
 ```
 
 ---
@@ -65,37 +71,44 @@ pip install -r requirements.txt
 
 ### 1. Ejecutar en el Computador Emisor (Jetson / PC con cámara)
 
-Conecta la Intel RealSense D435 e inicia el servicio especificando la IP de la máquina receptora:
+Conecta la Intel RealSense D435 e inicia el emisor. **No necesita IP del receptor**:
 
 ```bash
-python3 sender.py --ip 192.168.1.50
+python3 sender.py
 ```
 
 *Opcional: cambiar el puerto base UDP (por defecto es 5000):*
 
 ```bash
-python3 sender.py --ip 192.168.1.50 --port 5000
+python3 sender.py --port 5000
 ```
 
-El emisor mostrará únicamente una línea limpia confirmando la transmisión:
+El emisor mostrará:
 ```text
+Emisor escuchando en puerto 5000 (control: 5010) | 640×480 @ 30fps
+Esperando receptor...
+```
+
+Cuando un receptor se conecte:
+```text
+Receptor registrado: 192.168.1.50
 Emisor → 192.168.1.50:5000 | 640×480 @ 30fps
 ```
 
 ---
 
-### 2. Ejecutar en el Computador Receptor (PC remoto / Antigravity Agent)
+### 2. Ejecutar en el Computador Receptor (PC remoto)
 
-Inicia el receptor en la máquina que mostrará la interfaz y grabará el video:
+Inicia el receptor **especificando la IP del emisor**:
 
 ```bash
-python3 receiver.py
+python3 receiver.py --ip 192.168.1.XX
 ```
 
 *Si cambiaste el puerto en el emisor, especifícalo aquí también:*
 
 ```bash
-python3 receiver.py --port 5000
+python3 receiver.py --ip 192.168.1.XX --port 5000
 ```
 
 ---
@@ -108,6 +121,40 @@ python3 receiver.py --port 5000
 | **`E`** | **Detener grabación** actual. |
 | **`Q`** / **`ESC`** | Salir y cerrar la aplicación de manera limpia. |
 
+> **Nota**: La ventana es completamente redimensionable. Maximiza la ventana para ver todo el contenido en alta calidad.
+
+---
+
+## 🖥️ Interfaz del Receptor
+
+La ventana del receptor muestra:
+
+```
+┌────────────────────────────┬──────────────────────┬──────────────────────┐
+│  Intel RealSense D435      │                      │                      │
+│  ─────────────────────     │        RGB           │       DEPTH          │
+│  Fecha   21/07/2026        │                      │                      │
+│  Hora    15:20:30          │                      │                      │
+│  Resol.  640x480           ├──────────────────────┼──────────────────────┤
+│  Config. 30 FPS            │                      │                      │
+│  ASIC    42.5 C            │      IR LEFT         │      IR RIGHT        │
+│                            │                      │                      │
+│  Jetson                    │                      │                      │
+│  CPU     45.2 C            │                      │                      │
+│  GPU     43.1 C            │                      │                      │
+│  SOC     44.0 C            │                      │                      │
+│  Board   38.5 C            │                      │                      │
+│                            │                      │                      │
+│  Estado: Conectado ●       │                      │                      │
+├────────────────────────────┴──────────────────────┴──────────────────────┤
+│  Controles: [R] Iniciar Grabacion  |  [E] Detener Grabacion  |  [Q/ESC] │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Panel lateral (260px)**: Muestra telemetría del emisor en tiempo real.
+- **Mosaico 2x2 (1280px)**: Los 4 canales de la cámara con HUD (FPS, Frame ID, Timestamp).
+- **Barra inferior**: Controles de teclado disponibles.
+
 ---
 
 ## 📂 Estructura de Salida de la Grabación
@@ -117,24 +164,72 @@ Al iniciar una grabación llamada `sesion_01`, se creará la siguiente estructur
 ```text
 destino_seleccionado/
 └── sesion_01/
-    ├── sesion_01.mp4    <-- Video único MP4 (1280x960) con el mosaico de las 4 cámaras
+    ├── sesion_01.mp4    <-- Video único MP4 (1540x960) con panel + mosaico de las 4 cámaras
     └── metadata.csv     <-- Registro de sincronización y timestamps por frame
 ```
 
 El archivo `metadata.csv` registra por cada frame grabado: `frame_id`, `timestamp_ns` y `timestamp_utc`.
 
+> **Nota**: El video MP4 grabado incluye el panel de telemetría lateral, mostrando exactamente lo que se veía en la GUI del receptor al momento de la captura (temperaturas, fecha/hora, datos de la cámara).
+
 ---
 
-## 📡 Detalle del Protocolo UDP (Header de 32 Bytes)
+## 📡 Protocolo de Comunicación
 
-Cada fragmento transmitido por la red incluye la siguiente estructura binaria:
+### Flujo de Conexión
+
+```
+Receptor ──[REGISTER heartbeat]──> Emisor (puerto control = port_base + 10)
+Emisor ──[UDP frames + telemetría]──> Receptor (IP aprendida del REGISTER)
+```
+
+1. El **Receptor** envía paquetes `REGISTER` (heartbeat) cada 2 segundos al Emisor.
+2. El **Emisor** aprende la IP del receptor y comienza a enviar frames.
+3. Si no recibe heartbeat por 6 segundos, el Emisor pausa el envío sin cerrarse.
+4. Si el receptor se reconecta, la transmisión se reanuda automáticamente.
+
+### Paquete de Registro (REGISTER)
+
+| Offset | Campo | Tipo | Descripción |
+| :---: | --- | :---: | --- |
+| `0..3` | `magic` | 4 bytes | Identificador `RGRQ` |
+
+### Header de Datos (32 bytes)
+
+Cada fragmento de video o telemetría transmitido incluye la siguiente estructura binaria:
 
 | Offset | Campo | Tipo | Descripción |
 | :---: | --- | :---: | --- |
 | `0..3` | `magic` | 4 bytes | Identificador `RS4C` |
 | `4..7` | `frame_id` | uint32 | ID secuencial del frame |
 | `8..15` | `timestamp_ns` | uint64 | Timestamp del reloj emisor (ns) |
-| `16` | `channel_id` | uint8 | Canal: `0`=Color, `1`=Depth, `2`=IR Left, `3`=IR Right |
+| `16` | `channel_id` | uint8 | Canal: `0`=Color, `1`=Depth, `2`=IR Left, `3`=IR Right, `10`=Telemetría |
 | `17` | `frag_idx` | uint8 | Índice del fragmento |
 | `18` | `frag_total` | uint8 | Cantidad total de fragmentos |
 | `19..31` | `reserved` | 13 bytes | Reservado para uso futuro / alineación |
+
+### Canal de Telemetría (canal 10)
+
+El emisor envía datos de telemetría cada ~1 segundo como un paquete JSON en el canal 10:
+
+```json
+{
+  "jetson_temps": {"CPU": 45.2, "GPU": 43.1, "SOC": 44.0, "Board": 38.5},
+  "asic_temp": 42.5,
+  "date_str": "21/07/2026",
+  "time_str": "15:20:30",
+  "resolution": "640x480",
+  "fps_config": 30,
+  "timestamp": 1753127430.0
+}
+```
+
+### Puertos UDP
+
+| Puerto | Uso |
+| :---: | --- |
+| `port_base + 0` | Canal Color |
+| `port_base + 1` | Canal Depth |
+| `port_base + 2` | Canal IR Left |
+| `port_base + 3` | Canal IR Right |
+| `port_base + 10` | Canal Telemetría / Puerto de Control (REGISTER) |
