@@ -33,6 +33,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 .
 ├── camera.py                    # Conexión RealSense D435 (RealSenseCamera, sin modificar)
 ├── config.py                    # Constantes del protocolo, red, cámara, telemetría y grabación
+├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos de sincronización
 ├── utils.py                     # Funciones auxiliares de red y formato de timestamps
 ├── jetson_monitor.py            # Monitoreo de temperaturas Jetson (CPU, GPU, SOC, Board)
 ├── sender_stream.py             # Clase VideoSender (registro dinámico, compresión, cabeceras UDP)

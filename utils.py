@@ -73,3 +73,9 @@ def verificar_puerto_disponible(puerto: int) -> bool:
         return True
     except OSError:
         return False
+
+
+# Re-exportación de funciones de esteganografía desde el módulo independiente
+from steganography import incrustar_metadatos_frame, extraer_metadatos_frame
+
+

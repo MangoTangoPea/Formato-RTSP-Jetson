@@ -24,6 +24,7 @@ from config import (
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_TIMEOUT,
     UDP_PORT_BASE,
 )
+from steganography import FrameSteganography
 
 
 class VideoSender:
@@ -43,6 +44,7 @@ class VideoSender:
 
     def __init__(self, port_base: int = UDP_PORT_BASE) -> None:
         self.port_base = port_base
+        self._stego = FrameSteganography()
 
         # Dirección del receptor registrado
         self._receiver_host: Optional[str] = None
@@ -156,7 +158,10 @@ class VideoSender:
             # Grayscale (IR) — convertir a BGR para JPEG
             frame_bgr = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         else:
-            frame_bgr = frame
+            frame_bgr = frame.copy()
+
+        # Incrustar metadatos en la fila 0 de píxeles (esteganografía binaria 2x2)
+        frame_bgr = self._stego.embed(frame_bgr, frame_id, timestamp_ns, channel_id)
 
         _, encoded = cv2.imencode(
             '.jpg', frame_bgr,

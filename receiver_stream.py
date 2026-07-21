@@ -24,6 +24,7 @@ from config import (
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_INTERVAL,
     UDP_PORT_BASE,
 )
+from steganography import FrameSteganography
 
 
 class VideoReceiver:
@@ -49,12 +50,18 @@ class VideoReceiver:
         self.sender_ip = sender_ip
         self.port_base = port_base
         self._running: bool = False
+        self._stego = FrameSteganography()
 
         # Estado por canal
         self._frames: dict[int, Optional[np.ndarray]] = {ch: None for ch in CHANNELS}
         self._frame_ids: dict[int, Optional[int]] = {ch: None for ch in CHANNELS}
         self._timestamps: dict[int, Optional[int]] = {ch: None for ch in CHANNELS}
         self._locks: dict[int, threading.Lock] = {ch: threading.Lock() for ch in CHANNELS}
+
+        # Búfer de sincronización por frame_id: {frame_id: {channel_id: (frame, ts_ns, recv_time)}}
+        self._sync_buffer: dict[int, dict[int, tuple[np.ndarray, int, float]]] = {}
+        self._sync_lock = threading.Lock()
+        self._latest_delivered_frame_id: int = 0
 
         # Estadísticas por canal
         self._frames_received: dict[int, int] = {ch: 0 for ch in CHANNELS}
@@ -242,7 +249,28 @@ class VideoReceiver:
                 decoded = cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
                 if decoded is not None:
-                    ts_ns = assembly_meta[frame_id][1]
+                    # Extraer metadatos incrustados en los píxeles de la fila 0 (esteganografía)
+                    stego_meta = self._stego.extract(decoded)
+                    if stego_meta is not None:
+                        real_fid, real_ts, _ = stego_meta
+                        frame_id = real_fid
+                        ts_ns = real_ts
+                    else:
+                        ts_ns = assembly_meta[frame_id][1]
+
+                    now_recv = time.time()
+
+                    # Almacenar en el búfer de sincronización por frame_id
+                    with self._sync_lock:
+                        if frame_id not in self._sync_buffer:
+                            self._sync_buffer[frame_id] = {}
+                        self._sync_buffer[frame_id][channel_id] = (decoded, ts_ns, now_recv)
+
+                        # Limpieza de seguridad: mantener como máximo 30 frame_ids recientes
+                        if len(self._sync_buffer) > 30:
+                            oldest_fids = sorted(self._sync_buffer.keys())[:-30]
+                            for old_fid in oldest_fids:
+                                del self._sync_buffer[old_fid]
 
                     with self._locks[channel_id]:
                         self._frames[channel_id] = decoded
@@ -283,7 +311,10 @@ class VideoReceiver:
 
     def get_frames(self) -> dict[str, Optional[np.ndarray]]:
         """
-        Retorna los 4 frames más recientes.
+        Retorna los 4 frames perfectamente sincronizados por frame_id y timestamp.
+
+        Si existen frames incompletos o viejos por desincronía o pérdida de red,
+        se descartan automáticamente.
 
         Returns
         -------
@@ -291,6 +322,46 @@ class VideoReceiver:
             Diccionario con claves 'color', 'depth', 'ir_left', 'ir_right'.
             None si el canal no tiene datos.
         """
+        now = time.time()
+        best_fid = None
+
+        with self._sync_lock:
+            # 1. Buscar frame_id más reciente que tenga los 4 canales completos
+            complete_fids = [
+                fid for fid, chs in self._sync_buffer.items()
+                if len(chs) == 4 and fid > self._latest_delivered_frame_id
+            ]
+
+            if complete_fids:
+                best_fid = max(complete_fids)
+            else:
+                # 2. Si no hay completo pero hay frames esperando > 100ms (pérdida de red en algún canal)
+                stale_fids = [
+                    fid for fid, chs in self._sync_buffer.items()
+                    if fid > self._latest_delivered_frame_id and
+                    (now - min(t for _, _, t in chs.values())) > 0.10
+                ]
+                if stale_fids:
+                    best_fid = max(stale_fids)
+
+            if best_fid is not None:
+                self._latest_delivered_frame_id = best_fid
+                target_chs = self._sync_buffer[best_fid]
+
+                # Actualizar los canales disponibles para este frame_id
+                for ch_id, name in CHANNELS.items():
+                    if ch_id in target_chs:
+                        frame_data, ts, _ = target_chs[ch_id]
+                        with self._locks[ch_id]:
+                            self._frames[ch_id] = frame_data
+                            self._frame_ids[ch_id] = best_fid
+                            self._timestamps[ch_id] = ts
+
+                # Descartar y purgar del búfer todos los frame_ids menores o iguales a best_fid
+                purge_fids = [fid for fid in self._sync_buffer.keys() if fid <= best_fid]
+                for fid in purge_fids:
+                    del self._sync_buffer[fid]
+
         result = {}
         for ch_id, name in CHANNELS.items():
             with self._locks[ch_id]:
