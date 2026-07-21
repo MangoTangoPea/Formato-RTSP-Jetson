@@ -69,8 +69,9 @@ def main() -> None:
                 rec_info=recorder.info,
             )
 
-            # Escribir frame del mosaico si se está grabando (resolución nativa)
-            if recorder.recording:
+            # Escribir frame del mosaico si se está grabando y el paquete síncrono está completo
+            all_sync = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
+            if recorder.recording and all_sync:
                 color_fid, color_ts = sync_info.get('color', (0, 0))
                 fid = color_fid if color_fid is not None else 0
                 ts = color_ts if color_ts is not None else 0

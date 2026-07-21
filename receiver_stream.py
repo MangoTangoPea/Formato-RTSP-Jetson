@@ -311,56 +311,51 @@ class VideoReceiver:
 
     def get_frames(self) -> dict[str, Optional[np.ndarray]]:
         """
-        Retorna los 4 frames perfectamente sincronizados por frame_id y timestamp.
+        Retorna los 4 frames OBLIGATORIAMENTE sincronizados (mismo frame_id en los 4 canales).
 
-        Si existen frames incompletos o viejos por desincronía o pérdida de red,
-        se descartan automáticamente.
+        Si un conjunto de frames no posee los 4 canales completos (desincronía o pérdida),
+        SE BORRA automáticamente de la memoria sin entregarse.
 
         Returns
         -------
         dict[str, np.ndarray | None]
-            Diccionario con claves 'color', 'depth', 'ir_left', 'ir_right'.
-            None si el canal no tiene datos.
+            Diccionario con las imágenes de los 4 canales sincronizados,
+            o None si no hay un grupo de 4 canales síncronos disponible.
         """
         now = time.time()
         best_fid = None
 
         with self._sync_lock:
-            # 1. Buscar frame_id más reciente que tenga los 4 canales completos
+            # 1. Filtrar ÚNICAMENTE frame_ids que tengan EXACTAMENTE los 4 canales
             complete_fids = [
                 fid for fid, chs in self._sync_buffer.items()
                 if len(chs) == 4 and fid > self._latest_delivered_frame_id
             ]
 
             if complete_fids:
+                # Seleccionar el frame_id síncrono más reciente
                 best_fid = max(complete_fids)
-            else:
-                # 2. Si no hay completo pero hay frames esperando > 100ms (pérdida de red en algún canal)
-                stale_fids = [
-                    fid for fid, chs in self._sync_buffer.items()
-                    if fid > self._latest_delivered_frame_id and
-                    (now - min(t for _, _, t in chs.values())) > 0.10
-                ]
-                if stale_fids:
-                    best_fid = max(stale_fids)
-
-            if best_fid is not None:
                 self._latest_delivered_frame_id = best_fid
                 target_chs = self._sync_buffer[best_fid]
 
-                # Actualizar los canales disponibles para este frame_id
+                # Actualizar únicamente el conjunto síncrono validado (los 4 canales coinciden)
                 for ch_id, name in CHANNELS.items():
-                    if ch_id in target_chs:
-                        frame_data, ts, _ = target_chs[ch_id]
-                        with self._locks[ch_id]:
-                            self._frames[ch_id] = frame_data
-                            self._frame_ids[ch_id] = best_fid
-                            self._timestamps[ch_id] = ts
+                    frame_data, ts, _ = target_chs[ch_id]
+                    with self._locks[ch_id]:
+                        self._frames[ch_id] = frame_data
+                        self._frame_ids[ch_id] = best_fid
+                        self._timestamps[ch_id] = ts
 
-                # Descartar y purgar del búfer todos los frame_ids menores o iguales a best_fid
-                purge_fids = [fid for fid in self._sync_buffer.keys() if fid <= best_fid]
-                for fid in purge_fids:
-                    del self._sync_buffer[fid]
+            # 2. BORRADO OBLIGATORIO: Purgar de memoria cualquier frame desincronizado o incompleto
+            fids_to_delete = []
+            for fid, chs in self._sync_buffer.items():
+                if best_fid is not None and fid <= best_fid:
+                    fids_to_delete.append(fid)
+                elif len(chs) < 4 and (now - min(t for _, _, t in chs.values())) > 0.10:
+                    fids_to_delete.append(fid)  # BORRAR frame desincronizado / incompleto
+
+            for fid in fids_to_delete:
+                del self._sync_buffer[fid]
 
         result = {}
         for ch_id, name in CHANNELS.items():

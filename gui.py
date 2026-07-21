@@ -72,6 +72,7 @@ class GUI:
     def __init__(self, window_name: str = "Receptor RTP - RealSense D435") -> None:
         self.window_name = window_name
         self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self._last_valid_mosaic: Optional[np.ndarray] = None
 
         # cv2.WINDOW_GUI_NORMAL elimina la barra de herramientas y botones superiores de Qt/OpenCV
         cv2.namedWindow(
@@ -258,6 +259,7 @@ class GUI:
             Imagen BGR de MOSAIC_WIDTH x MOSAIC_HEIGHT (panel superior + mosaico 2x2).
         """
         processed: dict[str, np.ndarray] = {}
+        all_present = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
 
         for ch_key in ['color', 'depth', 'ir_left', 'ir_right']:
             f = frames.get(ch_key)
@@ -269,6 +271,10 @@ class GUI:
                 img = f.copy()
                 if img.ndim == 2:
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+                # Limpieza estética visual: retocar filas 0..1 sobre la franja esteganográfica para video e imagen 100% impecables
+                if img.shape[0] > 2 and img.shape[1] >= 256:
+                    img[0:2, 0:256] = img[2:3, 0:256]
 
                 # Asegurar tamaño correcto
                 if img.shape[:2] != (CAMERA_HEIGHT, CAMERA_WIDTH):
@@ -289,7 +295,15 @@ class GUI:
         panel = self._create_info_panel(telemetry, video_grid.shape[1])
 
         # Mosaico completo: panel (arriba) + cuadrícula 2x2 (abajo)
-        return np.vstack((panel, video_grid))
+        mosaic = np.vstack((panel, video_grid))
+
+        if all_present:
+            self._last_valid_mosaic = mosaic.copy()
+        elif self._last_valid_mosaic is not None:
+            # Si un frame fue borrado por desincronía, mostrar suavemente el último mosaico 100% síncrono
+            return self._last_valid_mosaic
+
+        return mosaic
 
     def render(
         self,
