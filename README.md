@@ -16,7 +16,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 - **Grabación exclusiva en el Receptor**:
   - Se activa con `R` e interrumpe con `E`.
   - Cuadro de diálogo para **personalizar el nombre de la grabación** y seleccionar la carpeta destino.
-  - Guarda 4 archivos `.avi` independientes (codec MJPG) dentro de subcarpetas separadas (`Color/`, `Depth/`, `IR_Left/`, `IR_Right/`) junto con su archivo `metadata.csv`.
+  - Guarda 4 archivos `.mp4` independientes (codec MPEG-4 `mp4v`, livianos y compatibles) dentro de subcarpetas separadas (`Color/`, `Depth/`, `IR_Left/`, `IR_Right/`) junto con su archivo `metadata.csv`.
 - **Indicador visual de grabación**: Muestra un aviso de borde rojo y un círculo **REC** parpadeante en tiempo real en la GUI del receptor.
 - **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse y espera automáticamente si el emisor se desconecta o reinicia.
 - **Salida limpia en Emisor**: Logging mínimo sin mensajes largos e innecesarios.
@@ -118,13 +118,13 @@ Al iniciar una grabación llamada `sesion_01`, se creará la siguiente estructur
 destino_seleccionado/
 └── sesion_01/
     ├── Color/
-    │   └── color.avi
+    │   └── color.mp4
     ├── Depth/
-    │   └── depth.avi
+    │   └── depth.mp4
     ├── IR_Left/
-    │   └── ir_left.avi
+    │   └── ir_left.mp4
     ├── IR_Right/
-    │   └── ir_right.avi
+    │   └── ir_right.mp4
     └── metadata.csv
 ```
 

@@ -55,5 +55,6 @@ JPEG_QUALITY: int = 85  # calidad JPEG para transmisión
 # GRABACIÓN
 # ===========================================================================
 
-RECORD_CODEC: str = 'MJPG'
+RECORD_CODEC: str = 'mp4v'
+RECORD_EXT: str = '.mp4'
 RECORD_FPS: int = 30

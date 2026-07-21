@@ -17,7 +17,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from config import RECORD_CODEC, RECORD_FPS, CAMERA_WIDTH, CAMERA_HEIGHT
+from config import RECORD_CODEC, RECORD_EXT, RECORD_FPS, CAMERA_WIDTH, CAMERA_HEIGHT
 
 
 class VideoRecorder:
@@ -117,7 +117,7 @@ class VideoRecorder:
         # Crear VideoWriters
         fourcc = cv2.VideoWriter_fourcc(*self.codec)
         for key, subdir in self.SUBDIRS.items():
-            filename = f"{key}.avi"
+            filename = f"{key}{RECORD_EXT}"
             filepath = os.path.join(self._record_dir, subdir, filename)
             writer = cv2.VideoWriter(filepath, fourcc, self.fps,
                                      (CAMERA_WIDTH, CAMERA_HEIGHT))
