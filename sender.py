@@ -3,12 +3,10 @@
 Emisor RTP — Intel RealSense D435.
 
 Captura 4 canales de la cámara y los transmite por UDP al receptor.
-Espera a que un receptor se registre enviando un heartbeat al puerto
-de control antes de comenzar a transmitir.
 
 Uso:
-    python3 sender.py
-    python3 sender.py --port 5000
+    python3 sender.py --ip 192.168.1.XX
+    python3 sender.py --ip 192.168.1.XX --port 5000
 """
 
 import sys
@@ -21,11 +19,9 @@ import numpy as np
 
 from camera import RealSenseCamera
 from sender_stream import VideoSender
-from jetson_monitor import JetsonMonitor
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
     CHANNEL_COLOR, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT,
-    CONTROL_PORT_OFFSET, TELEMETRY_INTERVAL,
 )
 
 # Flag para cierre limpio
@@ -62,6 +58,7 @@ def main() -> None:
     global _running
 
     parser = argparse.ArgumentParser(description="Emisor RTP - RealSense D435")
+    parser.add_argument("--ip", required=True, help="IP del receptor")
     parser.add_argument("--port", type=int, default=UDP_PORT_BASE, help="Puerto UDP base")
     args = parser.parse_args()
 
@@ -70,38 +67,17 @@ def main() -> None:
 
     camera = None
     sender = None
-    jetson = None
 
     try:
         camera = RealSenseCamera()
-        sender = VideoSender(port_base=args.port)
-        jetson = JetsonMonitor()
+        sender = VideoSender(args.ip, args.port)
 
-        control_port = args.port + CONTROL_PORT_OFFSET
-
-        print(f"Emisor escuchando en puerto {args.port} "
-              f"(control: {control_port}) | "
+        print(f"Emisor → {args.ip}:{args.port} | "
               f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
-        print("Esperando receptor...")
 
         frame_id: int = 0
-        last_telemetry: float = 0.0
-        was_connected: bool = False
 
         while _running:
-            # Verificar conexión del receptor
-            if not sender.receiver_connected:
-                if was_connected:
-                    print("Receptor desconectado. Esperando reconexión...")
-                    was_connected = False
-                time.sleep(0.1)
-                continue
-
-            if not was_connected:
-                print(f"Emisor → {sender.receiver_host}:{args.port} | "
-                      f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
-                was_connected = True
-
             frames = camera.get_frames()
             if not all(frames):
                 continue
@@ -126,13 +102,6 @@ def main() -> None:
             sender.send_frame(CHANNEL_DEPTH, depth_color, frame_id, timestamp_ns)
             sender.send_frame(CHANNEL_IR_LEFT, ir_left_bgr, frame_id, timestamp_ns)
             sender.send_frame(CHANNEL_IR_RIGHT, ir_right_bgr, frame_id, timestamp_ns)
-
-            # Enviar telemetría cada TELEMETRY_INTERVAL segundos
-            now = time.time()
-            if now - last_telemetry >= TELEMETRY_INTERVAL:
-                telemetry = jetson.get_telemetry(camera)
-                sender.send_telemetry(telemetry, frame_id)
-                last_telemetry = now
 
     except RuntimeError as e:
         print(f"Error cámara: {e}", file=sys.stderr)

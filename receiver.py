@@ -3,12 +3,12 @@
 Receptor RTP — Intel RealSense D435.
 
 Recibe los 4 canales de video transmitidos por el Emisor mediante RTP/UDP,
-muestra una interfaz responsive con vista simultánea 2x2 + panel de telemetría
-lateral y gestiona la grabación local del mosaico completo como un solo archivo MP4.
+muestra una interfaz con vista simultánea 2x2 y gestiona la grabación
+local del mosaico como un solo archivo MP4.
 
 Uso:
-    python3 receiver.py --ip 192.168.1.XX
-    python3 receiver.py --ip 192.168.1.XX --port 5000
+    python3 receiver.py
+    python3 receiver.py --port 5000
 """
 
 import sys
@@ -32,7 +32,6 @@ def main() -> None:
     global _running
 
     parser = argparse.ArgumentParser(description="Receptor RTP - RealSense D435")
-    parser.add_argument("--ip", required=True, help="IP del emisor (Jetson / PC con cámara)")
     parser.add_argument("--port", type=int, default=UDP_PORT_BASE, help="Puerto UDP base")
     args = parser.parse_args()
 
@@ -44,32 +43,30 @@ def main() -> None:
     recorder = None
 
     try:
-        receiver = VideoReceiver(sender_ip=args.ip, port_base=args.port)
+        receiver = VideoReceiver(port_base=args.port)
         receiver.start()
 
         gui = GUI()
         recorder = VideoRecorder()
 
-        print(f"Receptor conectando al emisor {args.ip}:{args.port}. "
-              f"Presione 'R' para grabar, 'E' para detener, 'Q' para salir.")
+        print(f"Receptor iniciado en el puerto base {args.port}. Presione 'R' para grabar, 'E' para detener, 'Q' para salir.")
 
         while _running:
             frames = receiver.get_frames()
             stats = receiver.get_stats()
             sync_info = receiver.get_sync_info()
-            telemetry = receiver.get_telemetry()
 
-            # Construir mosaico completo: panel telemetría + 2x2 (1540x960)
-            mosaic = gui.build_mosaic(frames, stats, sync_info, telemetry)
+            # Construir mosaico 2x2 (1280x960)
+            mosaic = gui.build_mosaic(frames, stats, sync_info)
 
-            # Renderizar interfaz (escalado responsive)
+            # Renderizar interfaz
             gui.render(
                 mosaic=mosaic,
                 recording=recorder.recording,
                 rec_info=recorder.info,
             )
 
-            # Escribir frame del mosaico si se está grabando (resolución nativa)
+            # Escribir frame del mosaico si se está grabando
             if recorder.recording:
                 color_fid, color_ts = sync_info.get('color', (0, 0))
                 fid = color_fid if color_fid is not None else 0
@@ -91,7 +88,7 @@ def main() -> None:
             elif action == "stop_rec" and recorder.recording:
                 rec_name = recorder.record_name
                 recorder.stop()
-                print(f"[REC] Grabacion detenida: {rec_name}.mp4")
+                print(f"[REC] Grabacion detenia: {rec_name}.mp4")
 
             elif action == "quit":
                 break
