@@ -62,7 +62,7 @@ class DisplayManager:
         self.start=time.time()
 
         cv2.namedWindow("Intel RealSense D435",
-                        cv2.WINDOW_NORMAL|cv2.WINDOW_KEEPRATIO)
+                        cv2.WINDOW_NORMAL|cv2.WINDOW_KEEPRATIO|cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow("Intel RealSense D435",1600,900)
 
     def update_fps(self):

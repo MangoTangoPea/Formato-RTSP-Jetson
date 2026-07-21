@@ -68,14 +68,17 @@ class GUI:
     # Resolución nativa del mosaico completo (panel + 4 cámaras)
     NATIVE_W: int = MOSAIC_WIDTH
     NATIVE_H: int = MOSAIC_HEIGHT
-    BAR_HEIGHT_NATIVE: int = 35     # Barra de controles en resolución nativa
 
     def __init__(self, window_name: str = "Receptor RTP - RealSense D435") -> None:
         self.window_name = window_name
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-        cv2.resizeWindow(self.window_name, self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE)
+        # cv2.WINDOW_GUI_NORMAL elimina la barra de herramientas y botones superiores de Qt/OpenCV
+        cv2.namedWindow(
+            self.window_name,
+            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL
+        )
+        cv2.resizeWindow(self.window_name, self.NATIVE_W, self.NATIVE_H)
 
     def _create_info_panel(
         self,
@@ -154,6 +157,15 @@ class GUI:
         status_color = COLOR_CONNECTED if connected else COLOR_DISCONNECTED
         status_text = "Conectado" if connected else "Sin conexion"
         info_lines.append((f"Estado: {status_text}", status_color, scale_text, 2))
+
+        # Separador
+        info_lines.append(("", COLOR_WHITE, scale_text, 1))
+
+        # Sección Controles
+        info_lines.append(("Controles", COLOR_YELLOW, scale_section, 2))
+        info_lines.append(("[R] Iniciar REC", COLOR_WHITE, scale_text, 1))
+        info_lines.append(("[E] Detener REC", COLOR_WHITE, scale_text, 1))
+        info_lines.append(("[Q/ESC] Salir", COLOR_WHITE, scale_text, 1))
 
         # Dibujar elementos con espaciado vertical cómodo
         y = 55
@@ -272,10 +284,10 @@ class GUI:
         rec_info: str,
     ) -> None:
         """
-        Renderiza el mosaico en pantalla con escalado responsive.
+        Renderiza el mosaico directamente en la ventana OpenCV.
 
-        El mosaico nativo se escala al tamaño de la ventana
-        con interpolación de alta calidad y fondo oscuro sin bordes blancos.
+        Aprovecha la gestión nativa de ventanas de OpenCV2 con WINDOW_GUI_NORMAL
+        para asegurar compatibilidad directa entre sistemas Ubuntu.
 
         Parameters
         ----------
@@ -286,102 +298,35 @@ class GUI:
         rec_info : str
             Texto descriptivo de la grabación.
         """
-        # Obtener tamaño actual de la ventana
-        try:
-            rect = cv2.getWindowImageRect(self.window_name)
-            win_w, win_h = rect[2], rect[3]
-        except cv2.error:
-            win_w, win_h = self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE
-
-        if win_w <= 0 or win_h <= 0:
-            win_w, win_h = self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE
-
-        # Calcular factor de escala para la barra de controles
-        bar_h_scaled = max(25, int(self.BAR_HEIGHT_NATIVE * (win_h / (self.NATIVE_H + self.BAR_HEIGHT_NATIVE))))
-
-        # Espacio disponible para el mosaico (ventana menos barra)
-        avail_h = win_h - bar_h_scaled
-        avail_w = win_w
-
-        if avail_h <= 0:
-            avail_h = win_h
-            bar_h_scaled = 0
-
-        # Escalar mosaico manteniendo relación de aspecto
-        src_h, src_w = mosaic.shape[:2]
-        scale_w = avail_w / src_w
-        scale_h = avail_h / src_h
-        scale = min(scale_w, scale_h)
-
-        new_w = int(src_w * scale)
-        new_h = int(src_h * scale)
-
-        # Elegir interpolación según dirección (INTER_CUBIC para máxima nitidez al ampliar)
-        if scale > 1.0:
-            interp = cv2.INTER_CUBIC
-        else:
-            interp = cv2.INTER_AREA
-
-        display_mosaic = cv2.resize(mosaic, (new_w, new_h), interpolation=interp)
-
-        # Crear canvas del tamaño exacto de la ventana con fondo oscuro profesional (elimina recuadros blancos)
-        canvas = np.full((win_h, win_w, 3), COLOR_BG_DARK, dtype=np.uint8)
-
-        # Centrar el mosaico escalado en el canvas
-        offset_x = (avail_w - new_w) // 2
-        offset_y = (avail_h - new_h) // 2
-
-        canvas[offset_y:offset_y + new_h, offset_x:offset_x + new_w] = display_mosaic
-
-        # Factor de escala para textos
-        text_scale = max(0.4, scale)
+        display_img = mosaic.copy()
+        h, w = display_img.shape[:2]
 
         # Si se está grabando: indicador visual parpadeante y borde rojo
         if recording:
-            # Borde rojo alrededor del mosaico
-            cv2.rectangle(
-                canvas,
-                (offset_x, offset_y),
-                (offset_x + new_w - 1, offset_y + new_h - 1),
-                COLOR_RED, max(2, int(4 * scale))
-            )
+            cv2.rectangle(display_img, (0, 0), (w - 1, h - 1), COLOR_RED, 4)
 
             # Círculo rojo parpadeante (alterna cada 0.5s)
             parpadeo = int(time.time() * 2) % 2 == 0
-            rec_x = offset_x + new_w - int(220 * scale)
-            rec_y = offset_y + int(35 * scale)
+            rec_x = w - 220
+            rec_y = 35
 
             if parpadeo:
-                cv2.circle(canvas, (rec_x, rec_y), max(5, int(10 * scale)), COLOR_RED, -1)
+                cv2.circle(display_img, (rec_x, rec_y), 10, COLOR_RED, -1)
 
             cv2.putText(
-                canvas, "REC",
-                (rec_x + int(18 * scale), rec_y + int(7 * scale)),
-                self.font, 0.75 * text_scale, COLOR_RED,
-                max(1, int(2 * text_scale)), cv2.LINE_AA
+                display_img, "REC",
+                (rec_x + 18, rec_y + 7),
+                self.font, 0.75, COLOR_RED, 2, cv2.LINE_AA
             )
 
             if rec_info:
                 cv2.putText(
-                    canvas, rec_info,
-                    (rec_x - int(240 * scale), rec_y + int(35 * scale)),
-                    self.font, 0.45 * text_scale, COLOR_WHITE,
-                    max(1, int(1 * text_scale)), cv2.LINE_AA
+                    display_img, rec_info,
+                    (rec_x - 240, rec_y + 35),
+                    self.font, 0.45, COLOR_WHITE, 1, cv2.LINE_AA
                 )
 
-        # Barra de estado inferior
-        if bar_h_scaled > 0:
-            bar_y = win_h - bar_h_scaled
-            controles_txt = "Controles: [R] Iniciar Grabacion  |  [E] Detener Grabacion  |  [Q / ESC] Salir"
-            font_scale_bar = max(0.38, 0.48 * text_scale)
-            cv2.putText(
-                canvas, controles_txt,
-                (int(20 * scale), bar_y + int(bar_h_scaled * 0.7)),
-                self.font, font_scale_bar, COLOR_YELLOW,
-                max(1, int(1 * text_scale)), cv2.LINE_AA
-            )
-
-        cv2.imshow(self.window_name, canvas)
+        cv2.imshow(self.window_name, display_img)
 
     def handle_input(self) -> Optional[str]:
         """
