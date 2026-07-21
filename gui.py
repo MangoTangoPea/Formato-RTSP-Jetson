@@ -84,30 +84,13 @@ class GUI:
         info_txt = f"{fid_str} | {ts_str} | {fps_str}"
         cv2.putText(img, info_txt, (15, 460), self.font, 0.45, (200, 200, 200), 1, cv2.LINE_AA)
 
-    def render(
+    def build_mosaic(
         self,
         frames: dict[str, Optional[np.ndarray]],
         stats: dict[str, dict[str, float | int]],
         sync_info: dict[str, Tuple[Optional[int], Optional[int]]],
-        recording: bool,
-        rec_info: str,
-    ) -> None:
-        """
-        Construye y renderiza el mosaico 2x2 con overlays e indicadores.
-
-        Parameters
-        ----------
-        frames : dict
-            Frames por canal ('color', 'depth', 'ir_left', 'ir_right').
-        stats : dict
-            Estadísticas FPS por canal.
-        sync_info : dict
-            Frame ID y Timestamp por canal.
-        recording : bool
-            True si la grabación está activa.
-        rec_info : str
-            Texto descriptivo de la grabación.
-        """
+    ) -> np.ndarray:
+        """Construye el mosaico 2x2 de 1280x960 con títulos y HUD."""
         processed: dict[str, np.ndarray] = {}
 
         for ch_key in ['color', 'depth', 'ir_left', 'ir_right']:
@@ -130,29 +113,49 @@ class GUI:
         # Mosaico 2x2 (Top: Color | Depth, Bottom: IR Left | IR Right)
         top = np.hstack((processed['color'], processed['depth']))
         bottom = np.hstack((processed['ir_left'], processed['ir_right']))
-        mosaico = np.vstack((top, bottom))  # 1280x960
+        return np.vstack((top, bottom))  # 1280x960
+
+    def render(
+        self,
+        mosaic: np.ndarray,
+        recording: bool,
+        rec_info: str,
+    ) -> None:
+        """
+        Renderiza el mosaico en pantalla agregando los indicadores de interfaz.
+
+        Parameters
+        ----------
+        mosaic : np.ndarray
+            Mosaico 2x2 de 1280x960.
+        recording : bool
+            True si la grabación está activa.
+        rec_info : str
+            Texto descriptivo de la grabación.
+        """
+        display_img = mosaic.copy()
 
         # Si se está grabando: indicador visual parpadeante y borde rojo
         if recording:
-            # Borde rojo alrededor de todo el mosaico
-            cv2.rectangle(mosaico, (0, 0), (mosaico.shape[1] - 1, mosaico.shape[0] - 1), COLOR_RED, 4)
+            # Borde rojo alrededor del mosaico
+            cv2.rectangle(display_img, (0, 0), (display_img.shape[1] - 1, display_img.shape[0] - 1), COLOR_RED, 4)
 
             # Círculo rojo parpadeante (alterna cada 0.5s)
             parpadeo = int(time.time() * 2) % 2 == 0
             if parpadeo:
-                cv2.circle(mosaico, (mosaico.shape[1] - 180, 30), 10, COLOR_RED, -1)
+                cv2.circle(display_img, (display_img.shape[1] - 180, 30), 10, COLOR_RED, -1)
 
-            cv2.putText(mosaico, "REC", (mosaico.shape[1] - 160, 37), self.font, 0.75, COLOR_RED, 2, cv2.LINE_AA)
+            cv2.putText(display_img, "REC", (display_img.shape[1] - 160, 37), self.font, 0.75, COLOR_RED, 2, cv2.LINE_AA)
 
             if rec_info:
-                cv2.putText(mosaico, rec_info, (mosaico.shape[1] - 400, 65), self.font, 0.45, COLOR_WHITE, 1, cv2.LINE_AA)
+                cv2.putText(display_img, rec_info, (display_img.shape[1] - 400, 65), self.font, 0.45, COLOR_WHITE, 1, cv2.LINE_AA)
 
-        # Barra de estado inferior (20px)
-        bar = np.zeros((25, mosaico.shape[1], 3), dtype=np.uint8)
+        # Barra de estado inferior (25px)
+        bar = np.zeros((25, display_img.shape[1], 3), dtype=np.uint8)
         controles_txt = "Controles: [R] Iniciar Grabacion  |  [E] Detener Grabacion  |  [Q / ESC] Salir"
         cv2.putText(bar, controles_txt, (15, 17), self.font, 0.45, COLOR_YELLOW, 1, cv2.LINE_AA)
 
-        window = np.vstack((mosaico, bar))
+        window = np.vstack((display_img, bar))
         cv2.imshow(self.window_name, window)
 
     def handle_input(self) -> Optional[str]:
@@ -196,7 +199,7 @@ class GUI:
             # 1. Pedir nombre de la grabación
             name = simpledialog.askstring(
                 "Nombre de la Grabación",
-                "Ingrese el nombre para la carpeta de grabación:",
+                "Ingrese el nombre para el archivo de grabación MP4:",
                 initialvalue=default_name,
                 parent=root
             )
@@ -209,7 +212,7 @@ class GUI:
 
             # 2. Pedir carpeta de destino
             directory = filedialog.askdirectory(
-                title="Seleccione la carpeta donde guardar la grabación",
+                title="Seleccione la carpeta donde guardar el video MP4",
                 parent=root
             )
 
@@ -223,7 +226,7 @@ class GUI:
         except Exception:
             # Fallback por terminal si no hay GUI Tkinter
             try:
-                print("\n--- Configurar Grabación ---")
+                print("\n--- Configurar Grabación MP4 ---")
                 name_in = input(f"Nombre de grabación [{default_name}]: ").strip()
                 name = name_in if name_in else default_name
 
