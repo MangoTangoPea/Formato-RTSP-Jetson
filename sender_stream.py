@@ -92,9 +92,11 @@ class VideoSender:
 
     @property
     def receiver_host(self) -> Optional[str]:
-        """IP del receptor registrado, o None."""
+        """IP del receptor registrado, o None si no hay conexión activa."""
         with self._receiver_lock:
-            if not self.receiver_connected:
+            if self._receiver_host is None:
+                return None
+            if (time.time() - self._last_heartbeat) >= HEARTBEAT_TIMEOUT:
                 return None
             return self._receiver_host
 
