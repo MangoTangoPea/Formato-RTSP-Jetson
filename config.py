@@ -54,18 +54,18 @@ CHANNELS: dict[int, str] = {
 TELEMETRY_INTERVAL: float = 1.0        # Segundos entre paquetes de telemetría
 
 # ===========================================================================
-# CÁMARA (refleja RealSenseCamera — NO modificar)
+# CÁMARA (refleja RealSenseCamera — importada desde config)
 # ===========================================================================
 
-CAMERA_WIDTH: int = 640
-CAMERA_HEIGHT: int = 480
+CAMERA_WIDTH: int = 1280
+CAMERA_HEIGHT: int = 720
 CAMERA_FPS: int = 30
 
 # ===========================================================================
 # TRANSMISIÓN
 # ===========================================================================
 
-JPEG_QUALITY: int = 85  # calidad JPEG para transmisión
+JPEG_QUALITY: int = 92  # Calidad JPEG superior para 720p HD
 
 # ===========================================================================
 # GRABACIÓN
@@ -80,5 +80,5 @@ RECORD_FPS: int = 30
 # ===========================================================================
 
 PANEL_WIDTH: int = 260                  # Ancho del panel lateral de telemetría
-MOSAIC_WIDTH: int = CAMERA_WIDTH * 2 + PANEL_WIDTH   # 1540
-MOSAIC_HEIGHT: int = CAMERA_HEIGHT * 2               # 960
+MOSAIC_WIDTH: int = CAMERA_WIDTH * 2 + PANEL_WIDTH   # 2820px para 720p
+MOSAIC_HEIGHT: int = CAMERA_HEIGHT * 2               # 1440px para 720p

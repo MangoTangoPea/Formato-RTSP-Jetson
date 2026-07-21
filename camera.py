@@ -7,13 +7,14 @@ NO MODIFICAR esta clase bajo ninguna circunstancia.
 """
 
 import pyrealsense2 as rs
+from config import CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS
 
 
 class RealSenseCamera:
     def __init__(self):
-        self.width=640
-        self.height=480
-        self.fps_config=30
+        self.width = CAMERA_WIDTH
+        self.height = CAMERA_HEIGHT
+        self.fps_config = CAMERA_FPS
 
         self.pipeline=rs.pipeline()
         self.config=rs.config()

@@ -84,7 +84,7 @@ class VideoReceiver:
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2097152)  # 2MB buffer
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4194304)  # 4MB buffer por canal 720p HD
             sock.settimeout(1.0)
             sock.bind(("0.0.0.0", port))
             self._sockets[ch_id] = sock

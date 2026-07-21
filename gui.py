@@ -74,7 +74,7 @@ class GUI:
         self.window_name = window_name
         self.font = cv2.FONT_HERSHEY_SIMPLEX
 
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow(self.window_name, self.NATIVE_W, self.NATIVE_H + self.BAR_HEIGHT_NATIVE)
 
     def _create_info_panel(
@@ -306,9 +306,9 @@ class GUI:
         new_w = int(src_w * scale)
         new_h = int(src_h * scale)
 
-        # Elegir interpolación según dirección
+        # Elegir interpolación según dirección (INTER_CUBIC para máxima nitidez al ampliar)
         if scale > 1.0:
-            interp = cv2.INTER_LINEAR
+            interp = cv2.INTER_CUBIC
         else:
             interp = cv2.INTER_AREA
 
