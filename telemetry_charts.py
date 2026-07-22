@@ -186,6 +186,57 @@ class TelemetryChartRenderer:
         gh = h - pad_top - pad_bottom
         return (gx, gy, gw, gh)
 
+    @staticmethod
+    def _format_sec_to_time(sec: float, include_seconds: bool = True) -> str:
+        """Convierte segundos del día (0..86400) a formato HH:MM:SS o HH:MM."""
+        sec = max(0.0, min(86400.0, sec))
+        h = int(sec // 3600)
+        m = int((sec % 3600) // 60)
+        s = int(sec % 60)
+        if include_seconds:
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        return f"{h:02d}:{m:02d}"
+
+    def _get_x_range_and_ticks(self, sec_list: List[float]) -> Tuple[float, float, List[Tuple[float, str]]]:
+        """
+        Calcula el rango adaptativo [x_min, x_max] según los datos existentes
+        para escalar la resolución del gráfico a lo largo del eje X.
+        Genera 9 marcas con sus etiquetas.
+        """
+        if not sec_list:
+            x_min, x_max = 0.0, 86400.0
+        else:
+            min_s = min(sec_list)
+            max_s = max(sec_list)
+            span_s = max_s - min_s
+
+            if span_s < 60.0:  # Rango menor a 1 minuto: ventana centrada de 60 segundos
+                center = (min_s + max_s) / 2.0
+                x_min = max(0.0, center - 30.0)
+                x_max = min(86400.0, center + 30.0)
+            elif span_s < 3600.0:  # Rango menor a 1 hora: agregar 30 segundos de margen
+                x_min = max(0.0, min_s - 30.0)
+                x_max = min(86400.0, max_s + 30.0)
+            else:  # Rango mayor a 1 hora: agregar 2% de margen
+                margin = span_s * 0.02
+                x_min = max(0.0, min_s - margin)
+                x_max = min(86400.0, max_s + margin)
+
+        span = x_max - x_min
+        if span <= 0.0:
+            span = 60.0
+            x_max = x_min + span
+
+        include_seconds = span < 7200.0  # Mostrar segundos si el rango es menor a 2 horas
+
+        ticks = []
+        for i in range(9):
+            val = x_min + span * (i / 8.0)
+            lbl = self._format_sec_to_time(val, include_seconds=include_seconds)
+            ticks.append((val, lbl))
+
+        return x_min, x_max, ticks
+
     def _render_power_chart(
         self,
         canvas: np.ndarray,
@@ -194,7 +245,7 @@ class TelemetryChartRenderer:
         selected_date: str,
         is_today: bool,
     ) -> None:
-        """Dibuja el diagrama de líneas del consumo de potencia en Vatios (W) durante 24h."""
+        """Dibuja el diagrama de líneas del consumo de potencia en Vatios (W)."""
         state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
             canvas, rect, f"CONSUMO DE POTENCIA (W) - {selected_date} {state_str}"
@@ -202,6 +253,7 @@ class TelemetryChartRenderer:
 
         power_points = []
         p_vals = []
+        sec_list = []
 
         for r in records:
             p = r.get('power')
@@ -212,33 +264,48 @@ class TelemetryChartRenderer:
                     sec_in_day = parts[0] * 3600.0 + parts[1] * 60.0 + parts[2]
                     power_points.append((sec_in_day, p))
                     p_vals.append(p)
+                    sec_list.append(sec_in_day)
                 except Exception:
                     pass
 
         power_points.sort(key=lambda x: x[0])
 
-        max_p = max(p_vals) if p_vals else 15.0
-        max_y = math.ceil(max_p / 5.0) * 5.0
-        max_y = max(max_y, 10.0)
-        min_y = 0.0
+        # Rango adaptable para Eje X (Resolución temporal)
+        x_min, x_max, x_ticks = self._get_x_range_and_ticks(sec_list)
+        span_x = x_max - x_min if x_max > x_min else 1.0
 
-        # Eje Y (Vatios)
-        y_step = max_y / 5.0
-        for val in np.arange(min_y, max_y + 0.1, y_step):
-            py = gy + int(gh * (1.0 - (val - min_y) / (max_y - min_y)))
+        # Rango adaptable para Eje Y (Vatios)
+        if p_vals:
+            min_p = min(p_vals)
+            max_p = max(p_vals)
+            p_range = max_p - min_p
+            margin = max(1.0, p_range * 0.15)
+            min_y = max(0.0, math.floor((min_p - margin) * 2.0) / 2.0)
+            max_y = math.ceil((max_p + margin) * 2.0) / 2.0
+            if max_y - min_y < 2.0:
+                max_y = min_y + 2.0
+        else:
+            min_y, max_y = 0.0, 15.0
+
+        span_y = max_y - min_y if max_y > min_y else 1.0
+
+        # Eje Y (Vatios) - 5 marcas
+        y_step = span_y / 4.0
+        for i in range(5):
+            val = min_y + i * y_step
+            py = gy + int(gh * (1.0 - (val - min_y) / span_y))
             cv2.line(canvas, (gx, py), (gx + gw, py), self.COLOR_GRID, 1)
-            cv2.putText(canvas, f"{val:.1f} W", (gx - 70, py + 5), self.font_regular, 0.5, self.COLOR_TEXT, 1, cv2.LINE_AA)
+            cv2.putText(canvas, f"{val:.1f} W", (gx - 70, py + 5), self.font_regular, 0.48, self.COLOR_TEXT, 1, cv2.LINE_AA)
 
-        # Eje X (24 horas del día: 00:00 a 24:00 cada 3 horas)
-        for i in range(9):
+        # Eje X (Resolución adaptable: marcas dinámicas)
+        for i, (val, hour_lbl) in enumerate(x_ticks):
             px = gx + int(gw * (i / 8.0))
             cv2.line(canvas, (px, gy), (px, gy + gh), self.COLOR_GRID, 1)
-            hour_lbl = f"{i * 3:02d}:00"
-            cv2.putText(canvas, hour_lbl, (px - 20, gy + gh + 25), self.font_regular, 0.5, self.COLOR_TEXT, 1, cv2.LINE_AA)
+            cv2.putText(canvas, hour_lbl, (px - 28, gy + gh + 25), self.font_regular, 0.45, self.COLOR_TEXT, 1, cv2.LINE_AA)
 
         cv2.rectangle(canvas, (gx, gy), (gx + gw, gy + gh), self.COLOR_AXIS, 1)
 
-        # Estadísticas 24h
+        # Estadísticas
         if p_vals:
             avg_p = sum(p_vals) / len(p_vals)
             last_p_str = f" | Ultimo: {p_vals[-1]:.2f}W" if is_today else ""
@@ -253,12 +320,12 @@ class TelemetryChartRenderer:
         if len(power_points) < 2:
             return
 
-        # Dibujar líneas del gráfico
+        # Dibujar líneas del gráfico escaladas al rango x_min..x_max
         pts_array = []
         for sec_day, val in power_points:
-            norm_x = sec_day / 86400.0
+            norm_x = (sec_day - x_min) / span_x
             norm_x = max(0.0, min(1.0, norm_x))
-            norm_y = (val - min_y) / (max_y - min_y)
+            norm_y = (val - min_y) / span_y
             norm_y = max(0.0, min(1.0, norm_y))
 
             px = gx + int(gw * norm_x)
@@ -288,31 +355,17 @@ class TelemetryChartRenderer:
         selected_date: str,
         is_today: bool,
     ) -> None:
-        """Dibuja el diagrama de líneas de temperaturas del hardware durante 24h."""
+        """Dibuja el diagrama de líneas de temperaturas del hardware."""
         state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
             canvas, rect, f"TEMPERATURAS DEL HARDWARE (C) - {selected_date} {state_str}"
         )
 
-        min_y, max_y = 20.0, 100.0
-        y_step = 20.0
-
-        for val in np.arange(min_y, max_y + 1.0, y_step):
-            py = gy + int(gh * (1.0 - (val - min_y) / (max_y - min_y)))
-            cv2.line(canvas, (gx, py), (gx + gw, py), self.COLOR_GRID, 1)
-            cv2.putText(canvas, f"{int(val)} C", (gx - 65, py + 5), self.font_regular, 0.5, self.COLOR_TEXT, 1, cv2.LINE_AA)
-
-        for i in range(9):
-            px = gx + int(gw * (i / 8.0))
-            cv2.line(canvas, (px, gy), (px, gy + gh), self.COLOR_GRID, 1)
-            hour_lbl = f"{i * 3:02d}:00"
-            cv2.putText(canvas, hour_lbl, (px - 20, gy + gh + 25), self.font_regular, 0.5, self.COLOR_TEXT, 1, cv2.LINE_AA)
-
-        cv2.rectangle(canvas, (gx, gy), (gx + gw, gy + gh), self.COLOR_AXIS, 1)
-
         series: Dict[str, List[Tuple[float, float]]] = {
             'CPU': [], 'GPU': [], 'SOC': [], 'Board': [], 'ASIC': []
         }
+        all_secs = []
+        all_temps = []
 
         for r in records:
             t_str = r.get('time_str', '')
@@ -327,12 +380,51 @@ class TelemetryChartRenderer:
             asic = r.get('asic_temp')
             if asic is not None:
                 series['ASIC'].append((sec_day, asic))
+                all_secs.append(sec_day)
+                all_temps.append(asic)
 
             temps = r.get('temps', {})
             for key in ['CPU', 'GPU', 'SOC', 'Board']:
                 val = temps.get(key)
                 if val is not None:
                     series[key].append((sec_day, val))
+                    all_secs.append(sec_day)
+                    all_temps.append(val)
+
+        # Rango adaptable para Eje X (Resolución temporal)
+        x_min, x_max, x_ticks = self._get_x_range_and_ticks(all_secs)
+        span_x = x_max - x_min if x_max > x_min else 1.0
+
+        # Rango adaptable para Eje Y (Temperatura C)
+        if all_temps:
+            min_t = min(all_temps)
+            max_t = max(all_temps)
+            t_range = max_t - min_t
+            margin = max(3.0, t_range * 0.15)
+            min_y = max(0.0, math.floor(min_t - margin))
+            max_y = math.ceil(max_t + margin)
+            if max_y - min_y < 10.0:
+                max_y = min_y + 10.0
+        else:
+            min_y, max_y = 20.0, 100.0
+
+        span_y = max_y - min_y if max_y > min_y else 1.0
+
+        # Eje Y (Temperatura C) - 5 marcas
+        y_step = span_y / 4.0
+        for i in range(5):
+            val = min_y + i * y_step
+            py = gy + int(gh * (1.0 - (val - min_y) / span_y))
+            cv2.line(canvas, (gx, py), (gx + gw, py), self.COLOR_GRID, 1)
+            cv2.putText(canvas, f"{int(round(val))} C", (gx - 65, py + 5), self.font_regular, 0.48, self.COLOR_TEXT, 1, cv2.LINE_AA)
+
+        # Eje X (Marcas adaptables)
+        for i, (val, hour_lbl) in enumerate(x_ticks):
+            px = gx + int(gw * (i / 8.0))
+            cv2.line(canvas, (px, gy), (px, gy + gh), self.COLOR_GRID, 1)
+            cv2.putText(canvas, hour_lbl, (px - 28, gy + gh + 25), self.font_regular, 0.45, self.COLOR_TEXT, 1, cv2.LINE_AA)
+
+        cv2.rectangle(canvas, (gx, gy), (gx + gw, gy + gh), self.COLOR_AXIS, 1)
 
         legend_x = gx + gw - 460
         legend_y = rect[1] + 25
@@ -352,9 +444,9 @@ class TelemetryChartRenderer:
 
             pts_array = []
             for sec_day, val in points:
-                norm_x = sec_day / 86400.0
+                norm_x = (sec_day - x_min) / span_x
                 norm_x = max(0.0, min(1.0, norm_x))
-                norm_y = (val - min_y) / (max_y - min_y)
+                norm_y = (val - min_y) / span_y
                 norm_y = max(0.0, min(1.0, norm_y))
 
                 px = gx + int(gw * norm_x)
