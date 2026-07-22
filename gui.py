@@ -175,7 +175,7 @@ class GUI:
         # COLUMNA 4: ATAJOS DE TECLADO / CONTROLES (x = 1910)
         # ---------------------------------------------------------------------
         cv2.putText(panel, "CONTROLES:", (1910, 40), font_bold, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
-        cv2.putText(panel, "[R] Grabar   [E] Detener   [Q] Salir", (1910, 84), font_bold, 0.65, COLOR_WHITE, 2, cv2.LINE_AA)
+        cv2.putText(panel, "[R] Grabar   [E] Detener   [D] Dashboard   [Q] Salir", (1910, 84), font_bold, 0.60, COLOR_WHITE, 2, cv2.LINE_AA)
 
         # Borde inferior del panel
         cv2.line(panel, (0, PANEL_HEIGHT - 1), (width, PANEL_HEIGHT - 1), COLOR_GRAY, 2)
@@ -374,13 +374,15 @@ class GUI:
         Returns
         -------
         str | None
-            'start_rec', 'stop_rec', 'quit' o None.
+            'start_rec', 'stop_rec', 'toggle_dashboard', 'quit' o None.
         """
         key = cv2.waitKey(10) & 0xFF
         if key in (ord('r'), ord('R')):
             return "start_rec"
         elif key in (ord('e'), ord('E')):
             return "stop_rec"
+        elif key in (ord('d'), ord('D')):
+            return "toggle_dashboard"
         elif key in (ord('q'), ord('Q'), 27):  # ESC
             return "quit"
         return None

@@ -18,11 +18,14 @@ import shutil
 import datetime
 import threading
 import argparse
+import cv2
 
 from receiver_stream import VideoReceiver
 from recorder import VideoRecorder
 from gui import GUI
 from config import UDP_PORT_BASE
+from telemetry_history import TelemetryHistoryManager
+from telemetry_charts import TelemetryChartRenderer
 
 _running: bool = True
 
@@ -46,6 +49,9 @@ def main() -> None:
     receiver = None
     gui = None
     recorder = None
+    history_manager = None
+    chart_renderer = None
+    show_dashboard = False
 
     try:
         receiver = VideoReceiver(sender_ip=args.ip, port_base=args.port)
@@ -53,15 +59,21 @@ def main() -> None:
 
         gui = GUI()
         recorder = VideoRecorder()
+        history_manager = TelemetryHistoryManager()
+        chart_renderer = TelemetryChartRenderer()
 
         print(f"Receptor conectando al emisor {args.ip}:{args.port}. "
-              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar, 'Q' para salir.")
+              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar, 'D' para Dashboard de consumo, 'Q' para salir.")
 
         while _running:
             frames = receiver.get_frames()
             stats = receiver.get_stats()
             sync_info = receiver.get_sync_info()
             telemetry = receiver.get_telemetry()
+
+            # Guardar telemetría y consumo de potencia en el historial
+            if telemetry:
+                history_manager.add_record(telemetry)
 
             # Construir mosaico completo: panel telemetría + 2x2 (1540x960)
             mosaic = gui.build_mosaic(frames, stats, sync_info, telemetry)
@@ -72,6 +84,11 @@ def main() -> None:
                 recording=recorder.recording,
                 rec_info=recorder.info,
             )
+
+            # Si el Dashboard está activo, renderizar diagramas de líneas en ventana flotante
+            if show_dashboard:
+                dash_canvas = chart_renderer.render_dashboard(history_manager)
+                cv2.imshow(chart_renderer.window_name, dash_canvas)
 
             # Escribir frame del mosaico en formato .mkv si se está grabando y el paquete síncrono está completo
             all_sync = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
@@ -120,6 +137,16 @@ def main() -> None:
                 )
                 save_thread.start()
 
+            elif action == "toggle_dashboard":
+                show_dashboard = not show_dashboard
+                if not show_dashboard:
+                    try:
+                        cv2.destroyWindow(chart_renderer.window_name)
+                    except Exception:
+                        pass
+                else:
+                    print("[DASHBOARD] Mostrando diagramas de consumo de energía (días pasados completados).")
+
             elif action == "quit":
                 break
 
@@ -127,6 +154,8 @@ def main() -> None:
         print(f"Error en Receptor: {e}", file=sys.stderr)
 
     finally:
+        if history_manager:
+            history_manager.save_to_file()
         if recorder and recorder.recording:
             recorder.stop()
         if receiver:

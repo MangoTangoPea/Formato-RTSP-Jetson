@@ -52,6 +52,8 @@ CHANNELS: dict[int, str] = {
 # ===========================================================================
 
 TELEMETRY_INTERVAL: float = 1.0        # Segundos entre paquetes de telemetría
+TELEMETRY_HISTORY_FILE: str = "telemetry_history.json"  # Archivo local del historial de potencia
+TELEMETRY_RETENTION_DAYS: int = 30     # Retención de historial de potencia (30 días)
 
 # ===========================================================================
 # CÁMARA (refleja RealSenseCamera — importada desde config)
