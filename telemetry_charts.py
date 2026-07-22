@@ -125,7 +125,7 @@ class TelemetryChartRenderer:
         # 5. Pie con controles e instrucciones
         cv2.putText(
             canvas,
-            "[Flechas / A / D] Navegar Fechas   |   [S] Guardar Imagen del Gráfico   |   [Q / ESC] Cerrar",
+            "[Flechas / A / D] Navegar Fechas   |   [S] Guardar Imagen del Grafico   |   [Q / ESC] Cerrar",
             (40, self.height - 20),
             self.font_regular,
             0.55,
@@ -197,7 +197,7 @@ class TelemetryChartRenderer:
         """Dibuja el diagrama de líneas del consumo de potencia en Vatios (W) durante 24h."""
         state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
-            canvas, rect, f"CONSUMO DE POTENCIA EN VATIOS (W) — {selected_date} {state_str}"
+            canvas, rect, f"CONSUMO DE POTENCIA (W) - {selected_date} {state_str}"
         )
 
         power_points = []
@@ -241,12 +241,14 @@ class TelemetryChartRenderer:
         # Estadísticas 24h
         if p_vals:
             avg_p = sum(p_vals) / len(p_vals)
-            last_p_str = f" | Último: {p_vals[-1]:.2f}W" if is_today else ""
-            stats_txt = f"Lecturas: {len(p_vals)}  |  Mín: {min(p_vals):.2f}W  |  Máx: {max(p_vals):.2f}W  |  Prom: {avg_p:.2f}W{last_p_str}"
+            last_p_str = f" | Ultimo: {p_vals[-1]:.2f}W" if is_today else ""
+            stats_txt = f"Lecturas: {len(p_vals)}  |  Min: {min(p_vals):.2f}W  |  Max: {max(p_vals):.2f}W  |  Prom: {avg_p:.2f}W{last_p_str}"
         else:
-            stats_txt = "Esperando lecturas de potencia de la Jetson para este día..."
+            stats_txt = "Esperando lecturas de potencia de la Jetson para este dia..."
 
-        cv2.putText(canvas, stats_txt, (gx + gw - 720, rect[1] + 32), self.font_regular, 0.52, self.COLOR_CYAN, 1, cv2.LINE_AA)
+        stats_w = cv2.getTextSize(stats_txt, self.font_regular, 0.50, 1)[0][0]
+        stats_x = (rect[0] + rect[2] - 20) - stats_w
+        cv2.putText(canvas, stats_txt, (stats_x, rect[1] + 32), self.font_regular, 0.50, self.COLOR_CYAN, 1, cv2.LINE_AA)
 
         if len(power_points) < 2:
             return
@@ -289,7 +291,7 @@ class TelemetryChartRenderer:
         """Dibuja el diagrama de líneas de temperaturas del hardware durante 24h."""
         state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
-            canvas, rect, f"TEMPERATURAS DEL HARDWARE (°C) — {selected_date} {state_str}"
+            canvas, rect, f"TEMPERATURAS DEL HARDWARE (C) - {selected_date} {state_str}"
         )
 
         min_y, max_y = 20.0, 100.0
