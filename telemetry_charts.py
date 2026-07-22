@@ -39,7 +39,6 @@ class TelemetryChartRenderer:
         'CPU': (0, 255, 255),       # Amarillo
         'GPU': (255, 0, 255),       # Magenta
         'SOC': (0, 255, 0),         # Verde
-        'Board': (255, 255, 0),     # Cyan
         'ASIC': (0, 165, 255),      # Naranja
     }
 
@@ -362,7 +361,7 @@ class TelemetryChartRenderer:
         )
 
         series: Dict[str, List[Tuple[float, float]]] = {
-            'CPU': [], 'GPU': [], 'SOC': [], 'Board': [], 'ASIC': []
+            'CPU': [], 'GPU': [], 'SOC': [], 'ASIC': []
         }
         all_secs = []
         all_temps = []
@@ -384,7 +383,7 @@ class TelemetryChartRenderer:
                 all_temps.append(asic)
 
             temps = r.get('temps', {})
-            for key in ['CPU', 'GPU', 'SOC', 'Board']:
+            for key in ['CPU', 'GPU', 'SOC']:
                 val = temps.get(key)
                 if val is not None:
                     series[key].append((sec_day, val))
