@@ -29,6 +29,8 @@ grabaciones/IR/*
 *.mkv
 *.mp4
 *.csv
+*.json
+telemetry_history.json
 
 # OS generated
 .DS_Store

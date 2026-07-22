@@ -14,29 +14,32 @@ import datetime
 import threading
 from typing import List, Dict, Any, Optional
 
-from config import TELEMETRY_HISTORY_FILE, TELEMETRY_RETENTION_DAYS
+from config import TELEMETRY_HISTORY_FILE, TELEMETRY_RETENTION_DAYS, SAVE_TELEMETRY_TO_DISK
 
 
 class TelemetryHistoryManager:
     """
     Administra el historial de telemetría y consumo de potencia de la Jetson.
 
-    Mantiene la persistencia en disco y la consulta por fechas.
+    Mantiene la consulta por fechas en memoria (RAM) y opcionalmente en disco.
     """
 
     def __init__(
         self,
         filepath: str = TELEMETRY_HISTORY_FILE,
         retention_days: int = TELEMETRY_RETENTION_DAYS,
+        save_to_disk: bool = SAVE_TELEMETRY_TO_DISK,
     ) -> None:
         self.filepath = filepath
+        self.save_to_disk = save_to_disk
         self.retention_seconds = retention_days * 86400.0
         self._lock = threading.Lock()
         self._records: List[Dict[str, Any]] = []
         self._last_save: float = 0.0
 
-        # Cargar historial guardado y purgar datos antiguos
-        self.load_from_file()
+        # Cargar historial guardado solo si está habilitado el guardado en disco
+        if self.save_to_disk:
+            self.load_from_file()
 
     def purge_old_records(self) -> None:
         """
@@ -142,7 +145,9 @@ class TelemetryHistoryManager:
             return [r for r in self._records if r.get('date_str') == target_date_str]
 
     def _save_to_file_locked(self) -> None:
-        """Guarda la lista de registros en disco (invocar bajo lock)."""
+        """Guarda la lista de registros en disco si save_to_disk es True."""
+        if not self.save_to_disk:
+            return
         try:
             temp_path = self.filepath + '.tmp'
             with open(temp_path, 'w', encoding='utf-8') as f:
