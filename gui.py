@@ -159,14 +159,22 @@ class GUI:
 
         cv2.putText(panel, f"ASIC: {asic_str}   |   {power_str}", (1210, 42), font_regular, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
 
-        # Temperaturas Jetson
+        # Temperaturas Jetson (CPU, GPU, SOC, Board)
         jetson_parts = []
-        for label, t in jetson_temps.items():
-            if t is not None:
-                jetson_parts.append(f"{label}: {t:.1f}C")
+        expected_labels = ['CPU', 'GPU', 'SOC', 'Board']
+
+        for label in expected_labels:
+            val = jetson_temps.get(label)
+            val_str = f"{val:.1f}C" if val is not None else "--C"
+            jetson_parts.append(f"{label}: {val_str}")
+
+        # Incluir cualquier otra categoría adicional de temperatura detectada
+        for label, val in jetson_temps.items():
+            if label not in expected_labels and val is not None:
+                jetson_parts.append(f"{label}: {val:.1f}C")
 
         jetson_str = " | ".join(jetson_parts) if jetson_parts else "Jetson: Esperando telemetria..."
-        cv2.putText(panel, jetson_str, (1210, 84), font_regular, 0.62, COLOR_WHITE, 2, cv2.LINE_AA)
+        cv2.putText(panel, jetson_str, (1210, 84), font_regular, 0.60, COLOR_WHITE, 2, cv2.LINE_AA)
 
         # Separador vertical 3
         cv2.line(panel, (1880, 15), (1880, PANEL_HEIGHT - 15), COLOR_GRAY, 2)

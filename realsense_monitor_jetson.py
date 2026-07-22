@@ -125,8 +125,18 @@ class DisplayManager:
         info.append('')
         info.append('Jetson')
         
-        for k,l in [('CPU-therm','CPU'),('GPU-therm','GPU'),('SOC0-therm','SOC'),('Tboard_tegra','Board')]:
-            if k in temps: info.append(f'{l:<7} {temps[k]:.1f} C')
+        cat_kw = {
+            'CPU': ['cpu'], 'GPU': ['gpu'], 'SOC': ['soc', 'tj'],
+            'Board': ['tboard', 'tdiode', 'board', 'aux', 'pmic', 'ambient', 'skin']
+        }
+        for label, keywords in cat_kw.items():
+            matched_v = None
+            for sys_name, sys_v in temps.items():
+                if any(kw in sys_name.lower() for kw in keywords):
+                    matched_v = sys_v
+                    break
+            if matched_v is not None:
+                info.append(f'{label:<7} {matched_v:.1f} C')
         y=30
         for txt in info:
             if txt=="Intel RealSense D435":

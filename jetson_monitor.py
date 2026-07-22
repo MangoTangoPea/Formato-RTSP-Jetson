@@ -26,7 +26,11 @@ class JetsonMonitor:
         'CPU': ['cpu-therm', 'cpu-thermal', 'cpu_thermal', 'cpu'],
         'GPU': ['gpu-therm', 'gpu-thermal', 'gpu_thermal', 'gpu'],
         'SOC': ['soc0-therm', 'soc-thermal', 'soc_thermal', 'tj-thermal', 'soc', 'tj'],
-        'Board': ['tboard_tegra', 'board-thermal', 'aux-thermal', 'tboard', 'board', 'ambient', 'aux'],
+        'Board': [
+            'tboard_tegra', 'tdiode_tegra', 'tdiode', 'board-thermal', 'board_thermal',
+            'aux-thermal', 'aux_thermal', 'tboard', 'board', 'ambient', 'aux', 'pmic',
+            'skin', 'temp_board', 'board_temp', 'thermal-est'
+        ],
     }
 
     def __init__(self) -> None:
