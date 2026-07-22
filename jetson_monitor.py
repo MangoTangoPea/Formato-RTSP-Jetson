@@ -86,6 +86,86 @@ class JetsonMonitor:
 
         return result
 
+    def power_consumption(self) -> dict[str, float]:
+        """
+        Lee el consumo de potencia (en Watts) del hardware Jetson desde sysfs e i2c/hwmon (INA3221).
+
+        Returns
+        -------
+        dict[str, float]
+            {nombre_riel: potencia_watts}
+        """
+        powers: dict[str, float] = {}
+
+        search_paths = (
+            glob.glob('/sys/bus/i2c/drivers/ina3221/*') +
+            glob.glob('/sys/devices/platform/*.ina3221/*') +
+            glob.glob('/sys/devices/platform/*.i2c/i2c-*/*-004*') +
+            glob.glob('/sys/class/hwmon/hwmon*')
+        )
+
+        for hwmon in set(search_paths):
+            try:
+                for power_in in glob.glob(os.path.join(hwmon, 'power*_input')) + \
+                                glob.glob(os.path.join(hwmon, 'hwmon/hwmon*/power*_input')):
+                    try:
+                        val_str = open(power_in, 'r').read().strip()
+                        val = float(val_str)
+                    except (ValueError, OSError):
+                        continue
+
+                    label = ""
+                    base_dir = os.path.dirname(power_in)
+                    base_name = os.path.basename(power_in).replace('_input', '')
+                    num_suffix = base_name.replace('power', '')
+
+                    rail_files = glob.glob(os.path.join(base_dir, f'rail_name_{num_suffix}')) + \
+                                 glob.glob(os.path.join(base_dir, f'in{num_suffix}_label'))
+                    if rail_files and os.path.exists(rail_files[0]):
+                        try:
+                            label = open(rail_files[0]).read().strip()
+                        except Exception:
+                            pass
+
+                    if not label:
+                        label = base_name.upper()
+
+                    if val > 100000:
+                        val_w = val / 1000000.0
+                    elif val > 100:
+                        val_w = val / 1000.0
+                    else:
+                        val_w = val
+
+                    if 0.01 <= val_w <= 200.0:
+                        powers[label] = round(val_w, 2)
+
+                if not powers:
+                    for curr_in in glob.glob(os.path.join(hwmon, 'curr*_input')) + \
+                                   glob.glob(os.path.join(hwmon, 'hwmon/hwmon*/curr*_input')):
+                        in_in = curr_in.replace('curr', 'in')
+                        if not os.path.exists(in_in):
+                            continue
+                        try:
+                            curr_val = float(open(curr_in).read().strip())
+                            in_val = float(open(in_in).read().strip())
+                        except Exception:
+                            continue
+
+                        if in_val > 100:
+                            in_val /= 1000.0
+                        if curr_val > 1000:
+                            curr_val /= 1000.0
+
+                        p_watts = in_val * curr_val
+                        if 0.01 <= p_watts <= 200.0:
+                            label = os.path.basename(curr_in).replace('_input', '').upper()
+                            powers[label] = round(p_watts, 2)
+            except Exception:
+                pass
+
+        return powers
+
     def get_telemetry(self, camera=None) -> dict:
         """
         Recopila todos los datos de telemetría para transmitir al receptor.
@@ -119,6 +199,17 @@ class JetsonMonitor:
                 clean_name = sys_type.replace('_thermal', '').replace('-thermal', '').replace('-therm', '').upper()
                 jetson_temps[clean_name] = temp_val
 
+        # Potencia de consumo de energía
+        powers = self.power_consumption()
+        main_power: Optional[float] = None
+        for main_rail in ['VDD_IN', 'POM_5V_IN', 'VDD_SYS_SOC', 'SYS_5V', 'MAIN', 'TOTAL', 'POWER1']:
+            if main_rail in powers:
+                main_power = powers[main_rail]
+                break
+
+        if main_power is None and powers:
+            main_power = round(sum(powers.values()), 2)
+
         # Temperatura ASIC de la RealSense
         asic_temp: Optional[float] = None
         if camera is not None:
@@ -133,6 +224,8 @@ class JetsonMonitor:
 
         return {
             'jetson_temps': jetson_temps,
+            'jetson_powers': powers,
+            'power_watts': main_power,
             'asic_temp': asic_temp,
             'datetime': now.isoformat(),
             'date_str': now.strftime('%d/%m/%Y'),

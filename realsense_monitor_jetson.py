@@ -21,6 +21,20 @@ class JetsonMonitor:
             except: pass
         return d
 
+    def power_consumption(self):
+        powers = {}
+        import os
+        paths = glob.glob('/sys/bus/i2c/drivers/ina3221/*') + glob.glob('/sys/class/hwmon/hwmon*')
+        for hwmon in set(paths):
+            try:
+                for p_in in glob.glob(os.path.join(hwmon, 'power*_input')):
+                    val = float(open(p_in).read().strip())
+                    val_w = val / 1000000.0 if val > 100000 else (val / 1000.0 if val > 100 else val)
+                    if 0.01 <= val_w <= 200.0:
+                        powers[os.path.basename(p_in).replace('_input', '').upper()] = round(val_w, 2)
+            except Exception: pass
+        return powers
+
 GREEN=(0,255,0)
 WHITE=(255,255,255)
 YELLOW=(0,255,255)
@@ -102,6 +116,12 @@ class DisplayManager:
             info.append(f"ASIC    {t:.1f} C")
         except Exception:
             pass
+
+        powers = jetson.power_consumption()
+        if powers:
+            tot_p = sum(powers.values())
+            info.append(f"Potencia {tot_p:.2f} W")
+
         info.append('')
         info.append('Jetson')
         

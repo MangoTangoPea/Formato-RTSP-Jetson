@@ -146,7 +146,18 @@ class GUI:
         # COLUMNA 3: TELEMETRÍA HARDWARE JETSON (x = 1210)
         # ---------------------------------------------------------------------
         asic_str = f"{asic_temp:.1f} C" if asic_temp is not None else "-- C"
-        cv2.putText(panel, f"ASIC Temp: {asic_str}", (1210, 42), font_regular, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
+        power_watts = telemetry.get('power_watts')
+        jetson_powers = telemetry.get('jetson_powers', {})
+
+        if power_watts is not None:
+            power_str = f"Potencia: {power_watts:.2f} W"
+        elif jetson_powers:
+            tot = sum(v for v in jetson_powers.values() if v is not None)
+            power_str = f"Potencia: {tot:.2f} W"
+        else:
+            power_str = "Potencia: -- W"
+
+        cv2.putText(panel, f"ASIC: {asic_str}   |   {power_str}", (1210, 42), font_regular, 0.68, COLOR_YELLOW, 2, cv2.LINE_AA)
 
         # Temperaturas Jetson
         jetson_parts = []
