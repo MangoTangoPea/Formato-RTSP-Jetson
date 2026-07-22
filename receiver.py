@@ -11,8 +11,11 @@ Uso:
     python3 receiver.py --ip 192.168.1.XX --port 1043
 """
 
+import os
 import sys
 import signal
+import shutil
+import datetime
 import argparse
 
 from receiver_stream import VideoReceiver
@@ -51,7 +54,7 @@ def main() -> None:
         recorder = VideoRecorder()
 
         print(f"Receptor conectando al emisor {args.ip}:{args.port}. "
-              f"Presione 'R' para grabar, 'E' para detener, 'Q' para salir.")
+              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar, 'Q' para salir.")
 
         while _running:
             frames = receiver.get_frames()
@@ -78,18 +81,34 @@ def main() -> None:
             action = gui.handle_input()
 
             if action == "start_rec" and not recorder.recording:
-                info = gui.ask_recording_info()
-                if info is not None:
-                    base_dir, name = info
-                    if recorder.start(base_dir, name):
-                        print(f"[REC] Grabacion iniciada: {name}.mkv -> {base_dir}")
-                    else:
-                        print("[ERROR] No se pudo iniciar la grabacion", file=sys.stderr)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                auto_name = f"grabacion_{timestamp}"
+                auto_dir = os.path.abspath("./grabaciones")
+                if recorder.start(auto_dir, auto_name):
+                    print(f"[REC] Grabación iniciada automáticamente: {auto_name}.mkv")
+                else:
+                    print("[ERROR] No se pudo iniciar la grabación", file=sys.stderr)
 
             elif action == "stop_rec" and recorder.recording:
                 rec_name = recorder.record_name
+                temp_path = recorder.video_path
+                total_frames = recorder.frames_recorded
                 recorder.stop()
-                print(f"[REC] Grabacion detenida: {rec_name}.mkv")
+                print(f"[REC] Grabación finalizada ({total_frames} frames). Solicitando ubicación de guardado...")
+
+                info = gui.ask_recording_info(default_name=rec_name)
+                if info is not None:
+                    target_dir, final_name = info
+                    target_path = os.path.join(target_dir, f"{final_name}.mkv")
+                    try:
+                        os.makedirs(target_dir, exist_ok=True)
+                        if os.path.abspath(temp_path) != os.path.abspath(target_path):
+                            shutil.move(temp_path, target_path)
+                        print(f"[REC] Grabación guardada exitosamente en: {target_path}")
+                    except Exception as err:
+                        print(f"[ERROR] No se pudo mover el archivo de grabación a {target_path}: {err}", file=sys.stderr)
+                else:
+                    print(f"[REC] Guardado cancelado. La grabación se conserva en: {temp_path}")
 
             elif action == "quit":
                 break

@@ -12,6 +12,7 @@ import os
 import time
 import queue
 import threading
+import datetime
 from typing import Optional
 
 import cv2
@@ -78,15 +79,20 @@ class VideoRecorder:
         """Nombre de la grabación actual."""
         return self._record_name
 
-    def start(self, base_dir: str, nombre: str) -> bool:
+    @property
+    def video_path(self) -> str:
+        """Ruta completa del archivo de video grabado."""
+        return self._video_path
+
+    def start(self, base_dir: str = "./grabaciones", nombre: Optional[str] = None) -> bool:
         """
         Inicia la grabación del mosaico completo en formato MKV.
 
         Parameters
         ----------
-        base_dir : str
+        base_dir : str, optional
             Carpeta base elegida por el usuario.
-        nombre : str
+        nombre : str, optional
             Nombre de la grabación.
 
         Returns
@@ -96,6 +102,10 @@ class VideoRecorder:
         """
         if self._recording:
             return False
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        if not nombre:
+            nombre = f"grabacion_{timestamp}"
 
         self._record_name = nombre
         self._record_dir = base_dir

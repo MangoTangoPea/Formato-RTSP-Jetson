@@ -374,10 +374,15 @@ class GUI:
             return "quit"
         return None
 
-    def ask_recording_info(self) -> Optional[Tuple[str, str]]:
+    def ask_recording_info(self, default_name: Optional[str] = None) -> Optional[Tuple[str, str]]:
         """
         Muestra un cuadro de diálogo Tkinter para ingresar el nombre de la grabación
-        y seleccionar la carpeta de guardado.
+        y seleccionar la carpeta donde guardarla una vez finalizada la grabación.
+
+        Parameters
+        ----------
+        default_name : str, optional
+            Nombre sugerido por defecto. Si no se indica, genera uno con la fecha/hora actual.
 
         Returns
         -------
@@ -385,7 +390,8 @@ class GUI:
             (directorio_base, nombre_grabacion) o None si el usuario canceló.
         """
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"grabacion_{timestamp}"
+        if not default_name:
+            default_name = f"grabacion_{timestamp}"
 
         try:
             import re
@@ -398,8 +404,8 @@ class GUI:
 
             # 1. Pedir nombre de la grabación
             name = simpledialog.askstring(
-                "Nombre de la Grabación",
-                "Ingrese el nombre para el archivo de grabación:",
+                "Guardar Grabación",
+                "Ingrese el nombre para guardar la grabación:",
                 initialvalue=default_name,
                 parent=root
             )
@@ -429,7 +435,7 @@ class GUI:
             # Fallback por terminal si no hay GUI Tkinter
             try:
                 import re
-                print("\n--- Configurar Grabación ---")
+                print("\n--- Guardar Grabación ---")
                 name_in = input(f"Nombre de grabación [{default_name}]: ").strip()
                 name = name_in if name_in else default_name
 
