@@ -85,8 +85,12 @@ def main() -> None:
                 rec_info=recorder.info,
             )
 
-            # Si el Dashboard está activo, renderizar diagramas de líneas en ventana flotante
+            # Si el Dashboard está activo, renderizar diagramas de líneas en ventana flotante redimensionable
             if show_dashboard:
+                cv2.namedWindow(
+                    chart_renderer.window_name,
+                    cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_GUI_NORMAL
+                )
                 dash_canvas = chart_renderer.render_dashboard(history_manager)
                 cv2.imshow(chart_renderer.window_name, dash_canvas)
 
@@ -145,7 +149,20 @@ def main() -> None:
                     except Exception:
                         pass
                 else:
-                    print("[DASHBOARD] Mostrando diagramas de consumo de energía (días pasados completados).")
+                    print("[DASHBOARD] Mostrando diagramas de consumo de energía y telemetría.")
+
+            elif action == "save_dashboard" and show_dashboard:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                save_dir = os.path.abspath("./grabaciones")
+                os.makedirs(save_dir, exist_ok=True)
+                save_path = os.path.join(save_dir, f"dashboard_potencia_{timestamp}.png")
+                dash_canvas = chart_renderer.render_dashboard(history_manager)
+                cv2.imwrite(save_path, dash_canvas)
+                chart_renderer.notify_saved(save_path)
+                print(f"[DASHBOARD] Imagen del gráfico guardada exitosamente en: {save_path}")
+
+            elif action == "prev_date" and show_dashboard:
+                chart_renderer.selected_date_index = max(0, chart_renderer.selected_date_index - 1)
 
             elif action == "quit":
                 break

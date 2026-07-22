@@ -4,7 +4,7 @@ TelemetryHistoryManager — Gestión e historial de telemetría y potencia de co
 
 Almacena registros diarios de consumo de energía y temperaturas en disco (telemetry_history.json),
 purgando automáticamente datos con antigüedad superior al límite configurado (30 días).
-Permite consultar únicamente los días pasados completados para visualización al día siguiente.
+Permite consultar tanto días pasados completados como el día actual en progreso.
 """
 
 import os
@@ -21,7 +21,7 @@ class TelemetryHistoryManager:
     """
     Administra el historial de telemetría y consumo de potencia de la Jetson.
 
-    Mantiene la persistencia en disco y aplica el filtro de días pasados completados.
+    Mantiene la persistencia en disco y la consulta por fechas.
     """
 
     def __init__(
@@ -103,21 +103,21 @@ class TelemetryHistoryManager:
             self.purge_old_records()
             return list(self._records)
 
-    def get_completed_dates(self) -> List[str]:
+    def get_available_dates(self) -> List[str]:
         """
-        Retorna la lista de fechas (DD/MM/YYYY) estrictamente ANTERIORES a la fecha de hoy.
-
-        Garantiza que solo se puedan visualizar reportes de días pasados completados
-        (al día siguiente).
+        Retorna la lista de todas las fechas (DD/MM/YYYY) registradas en el historial
+        (incluyendo días pasados y el día actual en progreso), ordenadas cronológicamente.
         """
-        today_str = datetime.datetime.now().strftime('%d/%m/%Y')
-
         with self._lock:
             dates = set()
             for r in self._records:
                 d = r.get('date_str')
-                if d and d != today_str:
+                if d:
                     dates.add(d)
+
+            today_str = datetime.datetime.now().strftime('%d/%m/%Y')
+            if not dates:
+                dates.add(today_str)
 
             # Ordenar las fechas cronológicamente
             def _parse_date(d_str: str) -> datetime.datetime:

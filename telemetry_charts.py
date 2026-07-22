@@ -3,9 +3,11 @@
 TelemetryChartRenderer — Generador de diagramas de líneas para consumo de potencia y telemetría.
 
 Renderiza un panel visual interactivo (1600x900) con diagramas de líneas de 24 horas.
-RESTRICCIÓN CLAVE: Solo permite visualizar reportes completados de días pasados (al día siguiente).
+Soporta visualización del día actual en progreso (datos acumulados hasta el momento) y días pasados.
+Muestra fecha/hora de consulta, permite minimizar/maximizar y guardar la imagen del diagrama a disco.
 """
 
+import os
 import math
 import time
 import datetime
@@ -19,7 +21,8 @@ class TelemetryChartRenderer:
     """
     Renderizador de diagramas de líneas para consumo de potencia y temperaturas.
 
-    Cumple con la regla de visualización al día siguiente (días pasados completados).
+    Incluye fecha/hora de consulta, indicador de día en progreso vs completado,
+    y soporte para guardar la imagen del diagrama a disco.
     """
 
     COLOR_BG = (20, 20, 20)
@@ -31,7 +34,6 @@ class TelemetryChartRenderer:
     COLOR_CYAN = (255, 255, 0)
     COLOR_GREEN = (0, 255, 0)
     COLOR_RED = (0, 0, 255)
-    COLOR_BLUE = (255, 100, 0)
 
     TEMP_COLORS: Dict[str, Tuple[int, int, int]] = {
         'CPU': (0, 255, 255),       # Amarillo
@@ -48,57 +50,82 @@ class TelemetryChartRenderer:
         self.font_bold = cv2.FONT_HERSHEY_DUPLEX
         self.font_regular = cv2.FONT_HERSHEY_SIMPLEX
         self.selected_date_index: int = -1
+        self._last_saved_msg: Optional[str] = None
+        self._saved_msg_timer: float = 0.0
 
     def render_dashboard(
         self,
         history_manager,
     ) -> np.ndarray:
         """
-        Genera la imagen BGR del Dashboard con los diagramas de líneas de días pasados completados.
+        Genera la imagen BGR del Dashboard con los diagramas de líneas.
         """
         canvas = np.full((self.height, self.width, 3), self.COLOR_BG, dtype=np.uint8)
 
-        # Encabezado superior
+        now = datetime.datetime.now()
+        today_str = now.strftime('%d/%m/%Y')
+        consult_str = now.strftime('%d/%m/%Y %H:%M:%S')
+
+        # 1. Encabezado superior con Fecha y Hora de Consulta
         cv2.putText(
             canvas,
-            "DASHBOARD DE CONSUMO DE ENERGIA Y POTENCIA (HISTORIAL DIARIO)",
-            (40, 45),
+            "DASHBOARD DE CONSUMO DE ENERGIA Y POTENCIA",
+            (40, 42),
             self.font_bold,
-            0.85,
+            0.82,
             self.COLOR_YELLOW,
             2,
             cv2.LINE_AA,
         )
 
-        today_str = datetime.datetime.now().strftime('%d/%m/%Y')
-        completed_dates = history_manager.get_completed_dates()
+        cv2.putText(
+            canvas,
+            f"Consulta: {consult_str}",
+            (1150, 42),
+            self.font_bold,
+            0.65,
+            self.COLOR_CYAN,
+            2,
+            cv2.LINE_AA,
+        )
 
-        # Si no hay días pasados completados todavía
-        if not completed_dates:
-            self._render_no_past_days_notice(canvas, today_str)
-            return canvas
+        available_dates = history_manager.get_available_dates()
 
-        # Ajustar índice de fecha seleccionada (por defecto la más reciente completada, ej. ayer)
-        if self.selected_date_index < 0 or self.selected_date_index >= len(completed_dates):
-            self.selected_date_index = len(completed_dates) - 1
+        # Ajustar índice de fecha seleccionada (por defecto la fecha actual de hoy)
+        if self.selected_date_index < 0 or self.selected_date_index >= len(available_dates):
+            self.selected_date_index = len(available_dates) - 1
 
-        selected_date = completed_dates[self.selected_date_index]
+        selected_date = available_dates[self.selected_date_index]
         records = history_manager.get_records_for_date(selected_date)
+        is_today = (selected_date == today_str)
 
-        # Barra de selección de fecha de día anterior
-        self._render_date_selector_bar(canvas, completed_dates, selected_date, today_str)
+        # 2. Barra de selección de fecha y estado
+        self._render_date_selector_bar(canvas, available_dates, selected_date, is_today)
 
-        # Dividir área en 2 rectángulos de gráficos
+        # 3. Rectángulos para los dos gráficos
         rect_power = (40, 130, self.width - 80, 340)
         rect_temps = (40, 500, self.width - 80, 340)
 
-        self._render_power_chart(canvas, rect_power, records, selected_date)
-        self._render_temperature_chart(canvas, rect_temps, records, selected_date)
+        self._render_power_chart(canvas, rect_power, records, selected_date, is_today)
+        self._render_temperature_chart(canvas, rect_temps, records, selected_date, is_today)
 
-        # Pie con controles
+        # 4. Mensaje temporal si se guardó la imagen
+        if self._last_saved_msg and (time.time() - self._saved_msg_timer < 4.0):
+            cv2.putText(
+                canvas,
+                self._last_saved_msg,
+                (40, self.height - 50),
+                self.font_bold,
+                0.62,
+                self.COLOR_GREEN,
+                2,
+                cv2.LINE_AA,
+            )
+
+        # 5. Pie con controles e instrucciones
         cv2.putText(
             canvas,
-            "[Flechas/A/D] Cambiar Dia Pasado   |   [Q/ESC] Cerrar Dashboard",
+            "[Flechas / A / D] Navegar Fechas   |   [S] Guardar Imagen del Gráfico   |   [Q / ESC] Cerrar",
             (40, self.height - 20),
             self.font_regular,
             0.55,
@@ -109,65 +136,38 @@ class TelemetryChartRenderer:
 
         return canvas
 
-    def _render_no_past_days_notice(self, canvas: np.ndarray, today_str: str) -> None:
-        """Dibuja la notificación indicando que los datos de hoy se están registrando y estarán disponibles mañana."""
-        box_w, box_h = 1000, 300
-        box_x = (self.width - box_w) // 2
-        box_y = (self.height - box_h) // 2
-
-        cv2.rectangle(canvas, (box_x, box_y), (box_x + box_w, box_y + box_h), self.COLOR_PANEL_BG, -1)
-        cv2.rectangle(canvas, (box_x, box_y), (box_x + box_w, box_y + box_h), self.COLOR_YELLOW, 2)
-
-        cv2.putText(
-            canvas,
-            "REGISTRO EN PROGRESO - VISUALIZACION AL DIA SIGUIENTE",
-            (box_x + 60, box_y + 70),
-            self.font_bold,
-            0.75,
-            self.COLOR_YELLOW,
-            2,
-            cv2.LINE_AA,
-        )
-
-        msg_lines = [
-            f"Dia actual en registro: {today_str}",
-            "El sistema esta guardando continuamente el consumo de potencia y telemetria de hoy.",
-            "Los diagramas de lineas completos de 24h estaran disponibles para su visualizacion",
-            "a partir de manana (al completar el dia).",
-        ]
-
-        y_offset = box_y + 130
-        for line in msg_lines:
-            cv2.putText(
-                canvas,
-                line,
-                (box_x + 60, y_offset),
-                self.font_regular,
-                0.62,
-                self.COLOR_TEXT,
-                1,
-                cv2.LINE_AA,
-            )
-            y_offset += 35
+    def notify_saved(self, filepath: str) -> None:
+        """Establece una notificación visual cuando la imagen se guarda en disco."""
+        self._last_saved_msg = f"[EXITO] Imagen guardada en: {filepath}"
+        self._saved_msg_timer = time.time()
 
     def _render_date_selector_bar(
         self,
         canvas: np.ndarray,
-        completed_dates: List[str],
+        available_dates: List[str],
         selected_date: str,
-        today_str: str,
+        is_today: bool,
     ) -> None:
-        """Dibuja la barra con el selector de fecha del día anterior completado."""
-        bar_rect = (40, 70, self.width - 80, 45)
+        """Dibuja la barra superior con la fecha seleccionada y el badge de estado."""
+        bar_rect = (40, 65, self.width - 80, 45)
         cv2.rectangle(canvas, (bar_rect[0], bar_rect[1]), (bar_rect[0] + bar_rect[2], bar_rect[1] + bar_rect[3]), self.COLOR_PANEL_BG, -1)
         cv2.rectangle(canvas, (bar_rect[0], bar_rect[1]), (bar_rect[0] + bar_rect[2], bar_rect[1] + bar_rect[3]), self.COLOR_AXIS, 1)
 
-        total = len(completed_dates)
+        total = len(available_dates)
         curr_num = self.selected_date_index + 1
-        txt_date = f"REPORTE DIA COMPLETADO: {selected_date} ({curr_num}/{total})"
+        txt_date = f"FECHA CONSULTADA: {selected_date} ({curr_num}/{total})"
 
-        cv2.putText(canvas, txt_date, (60, 100), self.font_bold, 0.65, self.COLOR_GREEN, 2, cv2.LINE_AA)
-        cv2.putText(canvas, f"[Dia de Hoy: {today_str} - En progreso]", (650, 100), self.font_regular, 0.58, (150, 150, 150), 1, cv2.LINE_AA)
+        cv2.putText(canvas, txt_date, (60, 95), self.font_bold, 0.65, self.COLOR_YELLOW, 2, cv2.LINE_AA)
+
+        # Badge de estado (En Progreso vs Día Completado)
+        if is_today:
+            status_text = "DIA ACTUAL EN PROGRESO (Datos acumulados hasta el momento)"
+            status_color = self.COLOR_CYAN
+        else:
+            status_text = "DIA ANTERIOR COMPLETADO (Reporte final de 24 horas)"
+            status_color = self.COLOR_GREEN
+
+        cv2.putText(canvas, status_text, (650, 95), self.font_bold, 0.58, status_color, 2, cv2.LINE_AA)
 
     def _draw_chart_box(self, canvas: np.ndarray, rect: Tuple[int, int, int, int], title: str) -> Tuple[int, int, int, int]:
         """Dibuja la caja contenedora del gráfico."""
@@ -192,13 +192,14 @@ class TelemetryChartRenderer:
         rect: Tuple[int, int, int, int],
         records: List[Dict[str, Any]],
         selected_date: str,
+        is_today: bool,
     ) -> None:
         """Dibuja el diagrama de líneas del consumo de potencia en Vatios (W) durante 24h."""
+        state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
-            canvas, rect, f"DIAGRAMA DE CONSUMO DE POTENCIA (VATIOS / W) — DIA: {selected_date}"
+            canvas, rect, f"CONSUMO DE POTENCIA EN VATIOS (W) — {selected_date} {state_str}"
         )
 
-        # Extraer puntos de potencia ordenados por la hora del día (00:00:00 a 23:59:59)
         power_points = []
         p_vals = []
 
@@ -214,7 +215,6 @@ class TelemetryChartRenderer:
                 except Exception:
                     pass
 
-        # Ordenar por segundo del día
         power_points.sort(key=lambda x: x[0])
 
         max_p = max(p_vals) if p_vals else 15.0
@@ -241,11 +241,12 @@ class TelemetryChartRenderer:
         # Estadísticas 24h
         if p_vals:
             avg_p = sum(p_vals) / len(p_vals)
-            stats_txt = f"Estadísticas 24h:  Mín: {min(p_vals):.2f}W  |  Máx: {max(p_vals):.2f}W  |  Promedio: {avg_p:.2f}W"
+            last_p_str = f" | Último: {p_vals[-1]:.2f}W" if is_today else ""
+            stats_txt = f"Lecturas: {len(p_vals)}  |  Mín: {min(p_vals):.2f}W  |  Máx: {max(p_vals):.2f}W  |  Prom: {avg_p:.2f}W{last_p_str}"
         else:
-            stats_txt = "Sin registros suficientes para este día..."
+            stats_txt = "Esperando lecturas de potencia de la Jetson para este día..."
 
-        cv2.putText(canvas, stats_txt, (gx + gw - 620, rect[1] + 32), self.font_regular, 0.52, self.COLOR_CYAN, 1, cv2.LINE_AA)
+        cv2.putText(canvas, stats_txt, (gx + gw - 720, rect[1] + 32), self.font_regular, 0.52, self.COLOR_CYAN, 1, cv2.LINE_AA)
 
         if len(power_points) < 2:
             return
@@ -283,10 +284,12 @@ class TelemetryChartRenderer:
         rect: Tuple[int, int, int, int],
         records: List[Dict[str, Any]],
         selected_date: str,
+        is_today: bool,
     ) -> None:
         """Dibuja el diagrama de líneas de temperaturas del hardware durante 24h."""
+        state_str = "(EN PROGRESO)" if is_today else "(COMPLETADO)"
         gx, gy, gw, gh = self._draw_chart_box(
-            canvas, rect, f"DIAGRAMA DE TEMPERATURAS HARDWARE (°C) — DIA: {selected_date}"
+            canvas, rect, f"TEMPERATURAS DEL HARDWARE (°C) — {selected_date} {state_str}"
         )
 
         min_y, max_y = 20.0, 100.0

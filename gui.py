@@ -374,7 +374,7 @@ class GUI:
         Returns
         -------
         str | None
-            'start_rec', 'stop_rec', 'toggle_dashboard', 'quit' o None.
+            'start_rec', 'stop_rec', 'toggle_dashboard', 'save_dashboard', 'prev_date', 'quit' o None.
         """
         key = cv2.waitKey(10) & 0xFF
         if key in (ord('r'), ord('R')):
@@ -383,6 +383,10 @@ class GUI:
             return "stop_rec"
         elif key in (ord('d'), ord('D')):
             return "toggle_dashboard"
+        elif key in (ord('s'), ord('S')):
+            return "save_dashboard"
+        elif key in (ord('a'), ord('A')):
+            return "prev_date"
         elif key in (ord('q'), ord('Q'), 27):  # ESC
             return "quit"
         return None
