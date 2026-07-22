@@ -16,6 +16,7 @@ import sys
 import signal
 import shutil
 import datetime
+import threading
 import argparse
 
 from receiver_stream import VideoReceiver
@@ -94,21 +95,30 @@ def main() -> None:
                 temp_path = recorder.video_path
                 total_frames = recorder.frames_recorded
                 recorder.stop()
-                print(f"[REC] Grabación finalizada ({total_frames} frames). Solicitando ubicación de guardado...")
+                print(f"[REC] Grabación finalizada ({total_frames} frames). La transmisión continúa en vivo.")
 
-                info = gui.ask_recording_info(default_name=rec_name)
-                if info is not None:
-                    target_dir, final_name = info
-                    target_path = os.path.join(target_dir, f"{final_name}.mkv")
-                    try:
-                        os.makedirs(target_dir, exist_ok=True)
-                        if os.path.abspath(temp_path) != os.path.abspath(target_path):
-                            shutil.move(temp_path, target_path)
-                        print(f"[REC] Grabación guardada exitosamente en: {target_path}")
-                    except Exception as err:
-                        print(f"[ERROR] No se pudo mover el archivo de grabación a {target_path}: {err}", file=sys.stderr)
-                else:
-                    print(f"[REC] Guardado cancelado. La grabación se conserva en: {temp_path}")
+                def _save_task(r_name: str, t_path: str) -> None:
+                    info = gui.ask_recording_info(default_name=r_name)
+                    if info is not None:
+                        target_dir, final_name = info
+                        target_path = os.path.join(target_dir, f"{final_name}.mkv")
+                        try:
+                            os.makedirs(target_dir, exist_ok=True)
+                            if os.path.abspath(t_path) != os.path.abspath(target_path):
+                                shutil.move(t_path, target_path)
+                            print(f"\n[REC] Grabación guardada exitosamente en: {target_path}")
+                        except Exception as err:
+                            print(f"\n[ERROR] No se pudo mover el archivo de grabación a {target_path}: {err}", file=sys.stderr)
+                    else:
+                        print(f"\n[REC] Guardado cancelado. La grabación se conserva en: {t_path}")
+
+                save_thread = threading.Thread(
+                    target=_save_task,
+                    args=(rec_name, temp_path),
+                    name="SaveRecordingDialog",
+                    daemon=True,
+                )
+                save_thread.start()
 
             elif action == "quit":
                 break

@@ -133,7 +133,7 @@ class VideoRecorder:
         self._running = True
         self._frames_recorded = 0
         self._t_start = time.time()
-        self._queue = queue.Queue()
+        self._queue = queue.Queue(maxsize=30)
         self._thread = threading.Thread(
             target=self._write_loop,
             name="VideoRecorder",
@@ -156,7 +156,10 @@ class VideoRecorder:
         if not self._recording or mosaic_frame is None:
             return
 
-        self._queue.put(mosaic_frame.copy())
+        try:
+            self._queue.put_nowait(mosaic_frame.copy())
+        except queue.Full:
+            pass
 
     def _write_loop(self) -> None:
         """Hilo de escritura: desencola frames del mosaico y los escribe a disco."""
