@@ -431,8 +431,8 @@ class GUI:
             dialog = tk.Toplevel(root)
             dialog.title("Guardar Grabación")
 
-            # Ventana rectangular compacta y centrada (350x140)
-            window_w, window_h = 350, 140
+            # Ventana rectangular compacta y centrada (360x160)
+            window_w, window_h = 360, 160
             scr_w = dialog.winfo_screenwidth()
             scr_h = dialog.winfo_screenheight()
             x = int((scr_w - window_w) / 2)
@@ -448,7 +448,7 @@ class GUI:
 
             label_msg = tk.Label(
                 frame,
-                text="Ingrese la etiqueta para organizar la grabación:",
+                text="Ingrese la etiqueta para organizar la grabación:\n(Ejemplos: C, IA, II, IR)",
                 font=("TkDefaultFont", 9),
                 anchor="w",
                 justify=tk.LEFT
