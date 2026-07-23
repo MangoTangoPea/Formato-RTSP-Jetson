@@ -20,7 +20,7 @@ import threading
 import argparse
 import cv2
 
-from receiver_stream import VideoReceiver
+from stego_decoder_receiver import VideoReceiver
 from recorder import VideoRecorder
 from gui import GUI
 from config import UDP_PORT_BASE

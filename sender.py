@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 from camera import RealSenseCamera
-from sender_stream import VideoSender
+from stego_encoder_sender import VideoSender
 from jetson_monitor import JetsonMonitor
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
