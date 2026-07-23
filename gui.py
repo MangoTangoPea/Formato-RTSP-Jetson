@@ -510,7 +510,7 @@ class GUI:
             # Fallback por terminal si no hay GUI Tkinter
             try:
                 print("\n--- Iniciar Grabación ---")
-                tag_in = input("Ingrese etiqueta para la grabación [general]: ").strip()
+                tag_in = input("Ingrese etiqueta para la grabación [general]: ").strip().upper()
                 tag = tag_in if tag_in else "general"
             except Exception:
                 tag = None
