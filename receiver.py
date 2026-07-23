@@ -103,43 +103,21 @@ def main() -> None:
             action = gui.handle_input()
 
             if action == "start_rec" and not recorder.recording:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                auto_name = f"grabacion_{timestamp}"
-                auto_dir = os.path.abspath("./grabaciones")
-                if recorder.start(auto_dir, auto_name):
-                    print(f"[REC] Grabación iniciada automáticamente: {auto_name}.mkv")
+                tag_info = gui.ask_recording_tag(base_dir="./grabaciones")
+                if tag_info is not None:
+                    target_dir, record_name, tag_clean = tag_info
+                    if recorder.start(target_dir, record_name):
+                        print(f"[REC] Grabación iniciada en carpeta '{tag_clean}': {record_name}.mkv")
+                    else:
+                        print("[ERROR] No se pudo iniciar la grabación", file=sys.stderr)
                 else:
-                    print("[ERROR] No se pudo iniciar la grabación", file=sys.stderr)
+                    print("[REC] Grabación cancelada por el usuario.")
 
             elif action == "stop_rec" and recorder.recording:
-                rec_name = recorder.record_name
-                temp_path = recorder.video_path
+                final_path = recorder.video_path
                 total_frames = recorder.frames_recorded
                 recorder.stop()
-                print(f"[REC] Grabación finalizada ({total_frames} frames). La transmisión continúa en vivo.")
-
-                def _save_task(r_name: str, t_path: str) -> None:
-                    info = gui.ask_recording_info(default_name=r_name)
-                    if info is not None:
-                        target_dir, final_name = info
-                        target_path = os.path.join(target_dir, f"{final_name}.mkv")
-                        try:
-                            os.makedirs(target_dir, exist_ok=True)
-                            if os.path.abspath(t_path) != os.path.abspath(target_path):
-                                shutil.move(t_path, target_path)
-                            print(f"\n[REC] Grabación guardada exitosamente en: {target_path}")
-                        except Exception as err:
-                            print(f"\n[ERROR] No se pudo mover el archivo de grabación a {target_path}: {err}", file=sys.stderr)
-                    else:
-                        print(f"\n[REC] Guardado cancelado. La grabación se conserva en: {t_path}")
-
-                save_thread = threading.Thread(
-                    target=_save_task,
-                    args=(rec_name, temp_path),
-                    name="SaveRecordingDialog",
-                    daemon=True,
-                )
-                save_thread.start()
+                print(f"[REC] Grabación finalizada ({total_frames} frames). Guardada exitosamente en: {final_path}")
 
             elif action == "toggle_dashboard":
                 show_dashboard = not show_dashboard

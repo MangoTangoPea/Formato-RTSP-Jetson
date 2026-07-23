@@ -399,82 +399,69 @@ class GUI:
             return "quit"
         return None
 
-    def ask_recording_info(self, default_name: Optional[str] = None) -> Optional[Tuple[str, str]]:
+    def ask_recording_tag(self, base_dir: str = "./grabaciones") -> Optional[Tuple[str, str, str]]:
         """
-        Muestra un cuadro de diálogo Tkinter para ingresar el nombre de la grabación
-        y seleccionar la carpeta donde guardarla una vez finalizada la grabación.
+        Solicita al usuario una etiqueta previa al inicio de la grabación.
+
+        Genera automáticamente:
+        1. Carpeta con el nombre de la etiqueta: base_dir/<etiqueta>
+        2. Nombre del archivo prefijado por la etiqueta: <etiqueta>_<timestamp>.mkv
 
         Parameters
         ----------
-        default_name : str, optional
-            Nombre sugerido por defecto. Si no se indica, genera uno con la fecha/hora actual.
+        base_dir : str
+            Directorio base donde se almacenan las grabaciones (por defecto './grabaciones').
 
         Returns
         -------
-        Tuple[str, str] | None
-            (directorio_base, nombre_grabacion) o None si el usuario canceló.
+        Tuple[str, str, str] | None
+            (directorio_destino, nombre_grabacion, etiqueta) o None si el usuario canceló.
         """
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        if not default_name:
-            default_name = f"grabacion_{timestamp}"
+        import os
+        import re
 
+        tag: Optional[str] = None
         try:
-            import re
             import tkinter as tk
-            from tkinter import filedialog, simpledialog
+            from tkinter import simpledialog
 
             root = tk.Tk()
             root.withdraw()
             root.attributes('-topmost', True)
 
-            # 1. Pedir nombre de la grabación
-            name = simpledialog.askstring(
-                "Guardar Grabación",
-                "Ingrese el nombre para guardar la grabación:",
-                initialvalue=default_name,
+            # 1. Pedir etiqueta con placeholder vacío
+            tag = simpledialog.askstring(
+                "Etiqueta de Grabación",
+                "Ingrese la etiqueta para organizar la grabación (ej: prueba1, calibracion):",
+                initialvalue="",
                 parent=root
             )
-
-            if not name or not name.strip():
-                root.destroy()
-                return None
-
-            name = name.strip()
-            if not re.search(r'_\d{8}(_\d{6})?$', name):
-                name = f"{name}_{timestamp}"
-
-            # 2. Pedir carpeta de destino
-            directory = filedialog.askdirectory(
-                title="Seleccione la carpeta donde guardar el video",
-                parent=root
-            )
-
             root.destroy()
-
-            if not directory:
-                return None
-
-            return directory, name
-
         except Exception:
             # Fallback por terminal si no hay GUI Tkinter
             try:
-                import re
-                print("\n--- Guardar Grabación ---")
-                name_in = input(f"Nombre de grabación [{default_name}]: ").strip()
-                name = name_in if name_in else default_name
-
-                if not re.search(r'_\d{8}(_\d{6})?$', name):
-                    name = f"{name}_{timestamp}"
-
-                import os
-                default_dir = os.path.abspath("./grabaciones")
-                dir_in = input(f"Carpeta destino [{default_dir}]: ").strip()
-                directory = dir_in if dir_in else default_dir
-
-                return directory, name
+                print("\n--- Iniciar Grabación ---")
+                tag_in = input("Ingrese etiqueta para la grabación [general]: ").strip()
+                tag = tag_in if tag_in else "general"
             except Exception:
-                return None
+                tag = None
+
+        if tag is None:
+            return None
+
+        tag_clean = tag.strip()
+        # Reemplazar espacios y caracteres no válidos para rutas por "_"
+        tag_clean = re.sub(r'[\s/\\:\*\?"<>\|]+', '_', tag_clean)
+        tag_clean = tag_clean.strip('_')
+
+        if not tag_clean:
+            tag_clean = "general"
+
+        target_dir = os.path.abspath(os.path.join(base_dir, tag_clean))
+        record_name = f"{tag_clean}_{timestamp}"
+
+        return target_dir, record_name, tag_clean
 
     def destroy(self) -> None:
         """Cierra todas las ventanas de OpenCV."""

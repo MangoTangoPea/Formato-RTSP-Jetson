@@ -19,7 +19,8 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 - **Metadatos de sincronización**: Cada paquete transporta `frame_id`, `timestamp_ns` y `channel_id` en una cabecera binaria de 32 bytes para evitar desfases entre canales.
 - **Grabación exclusiva en el Receptor**:
   - Se activa con `R` e interrumpe con `E`.
-  - Cuadro de diálogo para **personalizar el nombre de la grabación** y seleccionar la carpeta destino.
+  - Cuadro de diálogo para ingresar una **etiqueta personalizada** (ej: `prueba1`, `calibracion`).
+  - Organiza automáticamente los archivos en carpetas creadas con la etiqueta (`./grabaciones/<etiqueta>/`) y nombra los archivos prefijados por dicha etiqueta (`<etiqueta>_<YYYYMMDD_HHMMSS>.mkv`).
   - Guarda **un solo archivo de video `.mkv`** (Matroska Container, 1540×960) con el panel de telemetría + mosaico completo de las 4 cámaras integradas y metadatos de sincronización esteganografiados en la imagen.
 - **Indicador visual de grabación**: Muestra un aviso de borde rojo y un círculo **REC** parpadeante en tiempo real en la GUI del receptor.
 - **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse. Si el emisor se desconecta, el emisor pausa el envío y espera automáticamente reconexión.
@@ -126,8 +127,11 @@ python3 receiver.py --ip 192.168.1.XX --port 1043
 
 | Tecla | Acción |
 | :---: | --- |
-| **`R`** | Abrir diálogo para **iniciar grabación** (permite editar nombre y carpeta). |
-| **`E`** | **Detener grabación** actual. |
+| **`R`** | Pedir **etiqueta** e **iniciar grabación** (crea o asigna la carpeta `./grabaciones/<etiqueta>/`). |
+| **`E`** | **Detener grabación** actual y guardar automáticamente el archivo en su carpeta correspondiente. |
+| **`D`** | Mostrar / ocultar **Dashboard** de gráficos de consumo energético y telemetría. |
+| **`S`** | Guardar captura de pantalla del Dashboard (si está visible). |
+| **`A`** | Cambiar fecha en el Dashboard de telemetría. |
 | **`Q`** / **`ESC`** | Salir y cerrar la aplicación de manera limpia. |
 
 > **Nota**: La ventana es completamente redimensionable. Maximiza la ventana para ver todo el contenido en alta calidad.
@@ -156,26 +160,34 @@ La ventana del receptor muestra:
 │                            │                      │                      │
 │  Estado: Conectado ●       │                      │                      │
 ├────────────────────────────┴──────────────────────┴──────────────────────┤
-│  Controles: [R] Iniciar Grabacion  |  [E] Detener Grabacion  |  [Q/ESC] │
-└─────────────────────────────────────────────────────────────────────────┘
+│  Controles: [R] Grabar   [E] Detener   [D] Dashboard   [Q] Salir         │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Panel lateral (260px)**: Muestra telemetría del emisor en tiempo real.
-- **Mosaico 2x2 (1280px)**: Los 4 canales de la cámara con HUD (FPS, Frame ID, Timestamp).
+- **Panel superior horizontal (120px)**: Muestra telemetría del emisor en tiempo real dividida en 4 columnas alineadas.
+- **Mosaico 2x2**: Los 4 canales de la cámara con HUD (FPS, Frame ID, Timestamp).
 - **Barra inferior**: Controles de teclado disponibles.
 
 ---
 
 ## 📂 Estructura de Salida de la Grabación
 
-Al iniciar una grabación llamada `sesion_01_20260721_181248`, el video se guardará directamente en la carpeta elegida:
+Al iniciar una grabación ingresando la etiqueta `ensayo_robot`, el sistema genera (o redirige a) la carpeta con dicho nombre dentro de `grabaciones/`, guardando el video con la etiqueta como prefijo inicial:
 
 ```text
-destino_seleccionado/
-└── sesion_01_20260721_181248.mkv    <-- Archivo único MKV Matroska (1540x960) con mosaico síncrono y metadatos esteganografiados
+grabaciones/
+└── ensayo_robot/
+    ├── ensayo_robot_20260723_113000.mkv    <-- Video MKV con la etiqueta como prefijo principal
+    └── ensayo_robot_20260723_121500.mkv
 ```
 
-> **Nota**: El sistema graba en formato **Matroska Container (`.mkv`)**. Cada frame del video contiene los metadatos de sincronización (`frame_id`, `timestamp_ns` y `channel_id`) **esteganografiados directamente dentro de los píxeles de la imagen**, sin necesidad de archivos `.csv` secundarios.
+### Formato del Nombre del Archivo de Video:
+
+$$\text{Ruta: } \texttt{./grabaciones/}\mathbf{\langle etiqueta \rangle}\texttt{/}\mathbf{\langle etiqueta \rangle}\texttt{\_}\mathbf{\langle YYYYMMDD\_HHMMSS \rangle}\texttt{.mkv}$$
+
+- **`<etiqueta>`**: Etiqueta proporcionada por el usuario (ej: `prueba1`, `calibracion`, `ensayo_robot`). Si el usuario deja la casilla en blanco o presiona Enter directamente, se asigna automáticamente la etiqueta `general`.
+- **`<YYYYMMDD_HHMMSS>`**: Timestamp con la fecha y hora exacta en la que dio inicio la grabación.
+- **Formato y Ubicación**: Archivo único Matroska Container (`.mkv`, 1540×960). Cada frame contiene los metadatos de sincronización (`frame_id`, `timestamp_ns` y `channel_id`) **esteganografiados en la imagen**, sin archivos externos adicionales.
 
 ---
 
