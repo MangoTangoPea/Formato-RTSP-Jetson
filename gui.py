@@ -424,20 +424,117 @@ class GUI:
         tag: Optional[str] = None
         try:
             import tkinter as tk
-            from tkinter import simpledialog
 
             root = tk.Tk()
             root.withdraw()
-            root.attributes('-topmost', True)
 
-            # 1. Pedir etiqueta con placeholder vacío
-            tag = simpledialog.askstring(
-                "Guardar Grabación",
-                "Ingrese la etiqueta para guardar y organizar la grabación (ej: prueba1, calibracion):",
-                initialvalue="",
-                parent=root
+            dialog = tk.Toplevel(root)
+            dialog.title("Guardar Grabación")
+
+            # Ventana cuadrada centrada en pantalla (400x320)
+            window_w, window_h = 400, 320
+            scr_w = dialog.winfo_screenwidth()
+            scr_h = dialog.winfo_screenheight()
+            x = int((scr_w - window_w) / 2)
+            y = int((scr_h - window_h) / 2)
+            dialog.geometry(f"{window_w}x{window_h}+{x}+{y}")
+            dialog.resizable(False, False)
+            dialog.attributes('-topmost', True)
+            dialog.configure(bg="#FFFFFF")
+
+            dialog_res = {"tag": None}
+
+            # Contenedor principal en blanco
+            frame = tk.Frame(dialog, bg="#FFFFFF", padx=25, pady=25)
+            frame.pack(fill=tk.BOTH, expand=True)
+
+            label_title = tk.Label(
+                frame,
+                text="ETIQUETA DE GRABACIÓN",
+                font=("Helvetica", 11, "bold"),
+                bg="#FFFFFF",
+                fg="#111111"
             )
-            root.destroy()
+            label_title.pack(pady=(0, 8))
+
+            label_msg = tk.Label(
+                frame,
+                text="Ingrese la etiqueta para organizar el video\n(ej: prueba1, calibracion):",
+                font=("Helvetica", 10),
+                bg="#FFFFFF",
+                fg="#555555",
+                justify=tk.CENTER
+            )
+            label_msg.pack(pady=(0, 15))
+
+            entry = tk.Entry(
+                frame,
+                font=("Helvetica", 11),
+                width=24,
+                justify=tk.CENTER,
+                bg="#F8F9FA",
+                fg="#111111",
+                insertbackground="#111111",
+                highlightthickness=1,
+                highlightbackground="#CCCCCC",
+                highlightcolor="#007BFF",
+                relief=tk.SOLID,
+                bd=1
+            )
+            entry.pack(pady=(0, 20), ipady=5)
+            entry.focus_set()
+
+            def on_confirm():
+                dialog_res["tag"] = entry.get()
+                dialog.destroy()
+                root.destroy()
+
+            def on_cancel():
+                dialog_res["tag"] = None
+                dialog.destroy()
+                root.destroy()
+
+            entry.bind("<Return>", lambda e: on_confirm())
+            entry.bind("<Escape>", lambda e: on_cancel())
+            dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+
+            btn_frame = tk.Frame(frame, bg="#FFFFFF")
+            btn_frame.pack()
+
+            btn_ok = tk.Button(
+                btn_frame,
+                text="Guardar",
+                font=("Helvetica", 10, "bold"),
+                bg="#007BFF",
+                fg="#FFFFFF",
+                activebackground="#0056B3",
+                activeforeground="#FFFFFF",
+                relief=tk.FLAT,
+                width=10,
+                cursor="hand2",
+                command=on_confirm
+            )
+            btn_ok.pack(side=tk.LEFT, padx=8, ipady=3)
+
+            btn_cancel = tk.Button(
+                btn_frame,
+                text="Cancelar",
+                font=("Helvetica", 10),
+                bg="#E0E0E0",
+                fg="#333333",
+                activebackground="#D0D0D0",
+                activeforeground="#111111",
+                relief=tk.FLAT,
+                width=10,
+                cursor="hand2",
+                command=on_cancel
+            )
+            btn_cancel.pack(side=tk.LEFT, padx=8, ipady=3)
+
+            dialog.grab_set()
+            root.mainloop()
+
+            tag = dialog_res["tag"]
         except Exception:
             # Fallback por terminal si no hay GUI Tkinter
             try:
