@@ -79,4 +79,26 @@ def verificar_puerto_disponible(puerto: int) -> bool:
 from steganography import incrustar_metadatos_frame, extraer_metadatos_frame
 
 
-# esto es un comentario para probar si podemos darle update a la jetson desde el cliente
+import numpy as np
+
+def pack_z16_to_bgr(depth_z16: np.ndarray) -> np.ndarray:
+    """
+    Empaqueta una matriz de profundidad uint16 (Z16) de 16 bits en una imagen BGR de 3 canales sin pérdidas.
+
+    Canal B: Byte bajo (bits 0-7)
+    Canal G: Byte alto (bits 8-15)
+    Canal R: 0
+    """
+    low_byte = (depth_z16 & 0xFF).astype(np.uint8)
+    high_byte = ((depth_z16 >> 8) & 0xFF).astype(np.uint8)
+    zero = np.zeros_like(low_byte)
+    return np.dstack((low_byte, high_byte, zero))
+
+
+def unpack_bgr_to_z16(bgr_packed: np.ndarray) -> np.ndarray:
+    """
+    Desempaqueta una imagen BGR reconstruyendo la matriz original uint16 (profundidad Z16 en milímetros).
+    """
+    low_byte = bgr_packed[:, :, 0].astype(np.uint16)
+    high_byte = bgr_packed[:, :, 1].astype(np.uint16)
+    return (high_byte << 8) | low_byte

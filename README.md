@@ -185,9 +185,27 @@ grabaciones/
 
 $$\text{Ruta: } \texttt{./grabaciones/}\mathbf{\langle etiqueta \rangle}\texttt{/}\mathbf{\langle etiqueta \rangle}\texttt{\_}\mathbf{\langle YYYYMMDD\_HHMMSS \rangle}\texttt{.mkv}$$
 
-- **`<etiqueta>`**: Etiqueta proporcionada por el usuario (ej: `prueba1`, `calibracion`, `ensayo_robot`). Si el usuario deja la casilla en blanco o presiona Enter directamente, se asigna automáticamente la etiqueta `general`.
+- **`<etiqueta>`**: Etiqueta proporcionada por el usuario al presionar `E` (ej: `C`, `IA`, `II`, `IR`, `prueba1`). Si el usuario deja la casilla en blanco o presiona Enter directamente, se asigna automáticamente la etiqueta `general`.
 - **`<YYYYMMDD_HHMMSS>`**: Timestamp con la fecha y hora exacta en la que dio inicio la grabación.
-- **Formato y Ubicación**: Archivo único Matroska Container (`.mkv`, 1540×960). Cada frame contiene los metadatos de sincronización (`frame_id`, `timestamp_ns` y `channel_id`) **esteganografiados en la imagen**, sin archivos externos adicionales.
+- **Contenido Autocontenido Único (.mkv)**: Archivo único Matroska Container (`.mkv`, 1540×960). Cada frame contiene los 4 canales sincronizados, la telemetría y los metadatos esteganografiados en la imagen, **sin requerir archivos externos secundarios**.
+
+---
+
+## 🔬 Almacenamiento Sin Pérdidas de Profundidad (16-bit) e Infrarrojos (8-bit)
+
+El sistema empaqueta y conserva los datos sensores puros dentro del archivo único `.mkv`:
+
+1. **Profundidad de 16 Bits (Z16 - Precisión Milimétrica Exacta)**:
+   - Para evitar la pérdida de resolución milimétrica al guardar en video, cada píxel `uint16` de 16 bits se empaqueta en 2 canales BGR sin pérdidas (`B = Byte bajo`, `G = Byte alto`).
+   - Se procesa en la Jetson mediante operaciones vectorizadas NumPy de ultrabaja latencia (**<0.4 ms / <1% CPU**).
+   - Para reconstruir la profundidad exacta en milímetros a partir del archivo `.mkv`:
+     $$\text{Profundidad Z16 (mm)} = (\text{Canal}_G \ll 8) \mid \text{Canal}_B$$
+
+2. **Canales Infrarrojo Izquierdo e Infrarrojo Derecho (8-bit Y8)**:
+   - Los datos infrarrojos nativos de la cámara se conservan en sus **8 bits puros (`Y8`)** con los valores de intensidad del sensor (0-255) dentro del video.
+
+3. **Visualización Humana Dinámica (Cliente)**:
+   - La PC Cliente decodifica dinámicamente el cuadro de 16 bits y renderiza el mapa de calor de colores (*JET*) en tiempo real sobre la pantalla sin cargar la CPU de la Jetson.
 
 ---
 

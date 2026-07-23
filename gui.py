@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from utils import formatear_timestamp_ns
+from utils import formatear_timestamp_ns, unpack_bgr_to_z16
 from config import (
     CAMERA_WIDTH, CAMERA_HEIGHT, PANEL_HEIGHT,
     MOSAIC_WIDTH, MOSAIC_HEIGHT,
@@ -287,9 +287,15 @@ class GUI:
             if f is None:
                 img = crear_placeholder(CAMERA_WIDTH, CAMERA_HEIGHT, f"Esperando {title}...")
             else:
-                img = f.copy()
-                if img.ndim == 2:
-                    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                if ch_key == 'depth':
+                    # Reconstruir datos uint16 y generar JET heatmap dinámico para la interfaz
+                    z16 = unpack_bgr_to_z16(f)
+                    depth_8bit = cv2.convertScaleAbs(z16, alpha=0.03)
+                    img = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
+                else:
+                    img = f.copy()
+                    if img.ndim == 2:
+                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
                 # Limpieza estética visual: retocar filas 0..1 sobre la franja esteganográfica para video e imagen 100% impecables
                 if img.shape[0] > 2 and img.shape[1] >= 256:

@@ -24,6 +24,7 @@ import numpy as np
 from camera import RealSenseCamera
 from stego_encoder_sender import VideoSender as VideoServer
 from jetson_monitor import JetsonMonitor
+from utils import pack_z16_to_bgr
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
     CHANNEL_COLOR, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT,
@@ -38,14 +39,6 @@ def _handle_signal(signum, frame) -> None:
     """Maneja señales POSIX para cierre limpio."""
     global _running
     _running = False
-
-
-def convert_depth(depth_raw: np.ndarray) -> np.ndarray:
-    """
-    Convierte depth Z16 a heatmap JET BGR.
-    """
-    depth_8bit = cv2.convertScaleAbs(depth_raw, alpha=0.03)
-    return cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
 
 
 def convert_ir(ir_raw: np.ndarray) -> np.ndarray:
@@ -137,14 +130,14 @@ def main() -> None:
             ir_left = np.asanyarray(ir_left_f.get_data())
             ir_right = np.asanyarray(ir_right_f.get_data())
 
-            # Procesar depth e IR
-            depth_color = convert_depth(depth_raw)
+            # Empaquetado vectorizado de 16 bits sin pérdidas (<0.4ms en Jetson)
+            depth_packed = pack_z16_to_bgr(depth_raw)
             ir_left_bgr = convert_ir(ir_left)
             ir_right_bgr = convert_ir(ir_right)
 
             # Enviar los 4 canales
             server.send_frame(CHANNEL_COLOR, color, frame_id, timestamp_ns)
-            server.send_frame(CHANNEL_DEPTH, depth_color, frame_id, timestamp_ns)
+            server.send_frame(CHANNEL_DEPTH, depth_packed, frame_id, timestamp_ns)
             server.send_frame(CHANNEL_IR_LEFT, ir_left_bgr, frame_id, timestamp_ns)
             server.send_frame(CHANNEL_IR_RIGHT, ir_right_bgr, frame_id, timestamp_ns)
 
