@@ -79,3 +79,4 @@ def verificar_puerto_disponible(puerto: int) -> bool:
 from steganography import incrustar_metadatos_frame, extraer_metadatos_frame
 
 
+# esto es un comentario para probar si podemos darle update a la jetson desde el cliente

@@ -37,9 +37,9 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 ├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos de sincronización
 ├── utils.py                     # Funciones auxiliares de red y formato de timestamps
 ├── jetson_monitor.py            # Monitoreo de temperaturas Jetson (CPU, GPU, SOC, Board)
-├── sender_stream.py             # Clase VideoSender (registro dinámico, compresión, cabeceras UDP)
+├── stego_encoder_sender.py     # Clase VideoSender (registro dinámico, esteganografía, compresión, cabeceras UDP)
 ├── sender.py                    # Programa principal del Emisor
-├── receiver_stream.py           # Clase VideoReceiver (heartbeat, ensamble UDP, telemetría)
+├── stego_decoder_receiver.py   # Clase VideoReceiver (heartbeat, ensamble UDP, extracción esteganográfica, telemetría)
 ├── recorder.py                  # Clase VideoRecorder (escritura asíncrona del mosaico completo)
 ├── gui.py                       # Clase GUI (panel telemetría, mosaico 2x2, responsive, HUD, REC)
 ├── receiver.py                  # Programa principal del Receptor
