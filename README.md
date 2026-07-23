@@ -37,12 +37,12 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 ├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos de sincronización
 ├── utils.py                     # Funciones auxiliares de red y formato de timestamps
 ├── jetson_monitor.py            # Monitoreo de temperaturas Jetson (CPU, GPU, SOC, Board)
-├── stego_encoder_sender.py     # Clase VideoSender (registro dinámico, esteganografía, compresión, cabeceras UDP)
-├── sender.py                    # Programa principal del Emisor
-├── stego_decoder_receiver.py   # Clase VideoReceiver (heartbeat, ensamble UDP, extracción esteganográfica, telemetría)
+├── stego_encoder_sender.py     # Transmisión UDP (registro dinámico, esteganografía, compresión, cabeceras)
+├── server.py                    # Programa principal del Servidor (remplaza a sender.py)
+├── stego_decoder_receiver.py   # Recepción UDP (heartbeat, ensamble, extracción esteganográfica, telemetría)
 ├── recorder.py                  # Clase VideoRecorder (escritura asíncrona del mosaico completo)
 ├── gui.py                       # Clase GUI (panel telemetría, mosaico 2x2, responsive, HUD, REC)
-├── receiver.py                  # Programa principal del Receptor
+├── client.py                    # Programa principal del Cliente (remplaza a receiver.py)
 ├── realsense_monitor_jetson.py  # Monitor local original (referencia, no modificado)
 ├── requirements.txt             # Dependencias de Python
 └── README.md                    # Documentación del proyecto
@@ -65,60 +65,60 @@ sudo apt install -y python3-pip python3-tk libgl1-mesa-glx libglib2.0-0
 pip install -r requirements.txt
 ```
 
-> **Nota**: `pyrealsense2` debe estar instalado en el equipo **Emisor** que tiene conectada la cámara física Intel RealSense D435.
+> **Nota**: `pyrealsense2` debe estar instalado en el equipo **Servidor** que tiene conectada la cámara física Intel RealSense D435.
 
 ---
 
 ## 🚀 Uso del Sistema
 
-### 1. Ejecutar en el Computador Emisor (Jetson / PC con cámara)
+### 1. Ejecutar en el Computador Servidor (Jetson / PC con cámara)
 
-Conecta la Intel RealSense D435 e inicia el emisor. **No necesita IP del receptor**:
+Conecta la Intel RealSense D435 e inicia el servidor. **No necesita IP del cliente**:
 
 ```bash
-python3 sender.py
+python3 server.py
 ```
 
 *Grabar transmisión nativa en formato `.bag` (ROS/RealSense):*
 
 ```bash
-python3 sender.py --record-bag
+python3 server.py --record-bag
 # o indicando un nombre de archivo personalizado:
-python3 sender.py --record-bag mi_grabacion.bag
+python3 server.py --record-bag mi_grabacion.bag
 ```
 
 *Opcional: cambiar el puerto base UDP (por defecto es 1043):*
 
 ```bash
-python3 sender.py --port 1043
+python3 server.py --port 1043
 ```
 
-El emisor mostrará:
+El servidor mostrará:
 ```text
-Emisor escuchando en puerto 1043 (control: 1053) | 640×480 @ 30fps
-Esperando receptor...
+Servidor escuchando en puerto 1043 (control: 1053) | 640×480 @ 30fps
+Esperando cliente...
 ```
 
-Cuando un receptor se conecte:
+Cuando un cliente se conecte:
 ```text
-Receptor registrado: 192.168.1.50
-Emisor → 192.168.1.50:1043 | 640×480 @ 30fps
+Cliente registrado: 192.168.1.50
+Servidor → 192.168.1.50:1043 | 640×480 @ 30fps
 ```
 
 ---
 
-### 2. Ejecutar en el Computador Receptor (PC remoto)
+### 2. Ejecutar en el Computador Cliente (PC remoto)
 
-Inicia el receptor **especificando la IP del emisor**:
+Inicia el cliente **especificando la IP del servidor**:
 
 ```bash
-python3 receiver.py --ip 192.168.1.XX
+python3 client.py --ip 192.168.1.XX
 ```
 
-*Si cambiaste el puerto en el emisor, especifícalo aquí también:*
+*Si cambiaste el puerto en el servidor, especifícalo aquí también:*
 
 ```bash
-python3 receiver.py --ip 192.168.1.XX --port 1043
+python3 client.py --ip 192.168.1.XX --port 1043
 ```
 
 ---

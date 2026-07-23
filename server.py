@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Emisor RTP — Intel RealSense D435.
+Servidor RTP — Intel RealSense D435.
 
-Captura 4 canales de la cámara y los transmite por UDP al receptor.
-Espera a que un receptor se registre enviando un heartbeat al puerto
+Captura 4 canales de la cámara y los transmite por UDP al cliente.
+Espera a que un cliente se registre enviando un heartbeat al puerto
 de control antes de comenzar a transmitir.
 
 Uso:
-    python3 sender.py
-    python3 sender.py --port 1043
+    python3 server.py
+    python3 server.py --port 1043
 """
 
 import os
@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 from camera import RealSenseCamera
-from stego_encoder_sender import VideoSender
+from stego_encoder_sender import VideoSender as VideoServer
 from jetson_monitor import JetsonMonitor
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
@@ -43,8 +43,6 @@ def _handle_signal(signum, frame) -> None:
 def convert_depth(depth_raw: np.ndarray) -> np.ndarray:
     """
     Convierte depth Z16 a heatmap JET BGR.
-
-    Usa el mismo método que DisplayManager.convert_depth() del original.
     """
     depth_8bit = cv2.convertScaleAbs(depth_raw, alpha=0.03)
     return cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
@@ -53,17 +51,15 @@ def convert_depth(depth_raw: np.ndarray) -> np.ndarray:
 def convert_ir(ir_raw: np.ndarray) -> np.ndarray:
     """
     Convierte IR Y8 a BGR.
-
-    Usa el mismo método que DisplayManager.convert_ir() del original.
     """
     return cv2.cvtColor(ir_raw, cv2.COLOR_GRAY2BGR)
 
 
 def main() -> None:
-    """Punto de entrada del emisor."""
+    """Punto de entrada del servidor."""
     global _running
 
-    parser = argparse.ArgumentParser(description="Emisor RTP - RealSense D435")
+    parser = argparse.ArgumentParser(description="Servidor RTP - RealSense D435")
     parser.add_argument("--port", type=int, default=UDP_PORT_BASE, help="Puerto UDP base")
     parser.add_argument(
         "--record-bag",
@@ -79,7 +75,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     camera = None
-    sender = None
+    server = None
     jetson = None
 
     bag_path = None
@@ -97,33 +93,33 @@ def main() -> None:
 
     try:
         camera = RealSenseCamera(record_bag_path=bag_path)
-        sender = VideoSender(port_base=args.port)
+        server = VideoServer(port_base=args.port)
         jetson = JetsonMonitor()
 
         control_port = args.port + CONTROL_PORT_OFFSET
 
-        print(f"Emisor escuchando en puerto {args.port} "
+        print(f"Servidor escuchando en puerto {args.port} "
               f"(control: {control_port}) | "
               f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
         if bag_path:
             print(f"Grabando en formato .bag (RealSense RAW): {bag_path}")
-        print("Esperando receptor...")
+        print("Esperando cliente...")
 
         frame_id: int = 0
         last_telemetry: float = 0.0
         was_connected: bool = False
 
         while _running:
-            # Verificar conexión del receptor
-            if not sender.receiver_connected:
+            # Verificar conexión del cliente
+            if not server.receiver_connected:
                 if was_connected:
-                    print("Receptor desconectado. Esperando reconexión...")
+                    print("Cliente desconectado. Esperando reconexión...")
                     was_connected = False
                 time.sleep(0.1)
                 continue
 
             if not was_connected:
-                print(f"Emisor → {sender.receiver_host}:{args.port} | "
+                print(f"Servidor → {server.receiver_host}:{args.port} | "
                       f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
                 was_connected = True
 
@@ -147,16 +143,16 @@ def main() -> None:
             ir_right_bgr = convert_ir(ir_right)
 
             # Enviar los 4 canales
-            sender.send_frame(CHANNEL_COLOR, color, frame_id, timestamp_ns)
-            sender.send_frame(CHANNEL_DEPTH, depth_color, frame_id, timestamp_ns)
-            sender.send_frame(CHANNEL_IR_LEFT, ir_left_bgr, frame_id, timestamp_ns)
-            sender.send_frame(CHANNEL_IR_RIGHT, ir_right_bgr, frame_id, timestamp_ns)
+            server.send_frame(CHANNEL_COLOR, color, frame_id, timestamp_ns)
+            server.send_frame(CHANNEL_DEPTH, depth_color, frame_id, timestamp_ns)
+            server.send_frame(CHANNEL_IR_LEFT, ir_left_bgr, frame_id, timestamp_ns)
+            server.send_frame(CHANNEL_IR_RIGHT, ir_right_bgr, frame_id, timestamp_ns)
 
             # Enviar telemetría cada TELEMETRY_INTERVAL segundos
             now = time.time()
             if now - last_telemetry >= TELEMETRY_INTERVAL:
                 telemetry = jetson.get_telemetry(camera)
-                sender.send_telemetry(telemetry, frame_id)
+                server.send_telemetry(telemetry, frame_id)
                 last_telemetry = now
 
     except RuntimeError as e:
@@ -168,8 +164,8 @@ def main() -> None:
         sys.exit(1)
 
     finally:
-        if sender:
-            sender.close()
+        if server:
+            server.close()
         if camera:
             camera.stop()
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Receptor RTP — Intel RealSense D435.
+Cliente RTP — Intel RealSense D435.
 
-Recibe los 4 canales de video transmitidos por el Emisor mediante RTP/UDP,
+Recibe los 4 canales de video transmitidos por el Servidor mediante RTP/UDP,
 muestra una interfaz responsive con vista simultánea 2x2 + panel de telemetría
-lateral y gestiona la grabación local del mosaico completo como un solo archivo MP4.
+y gestiona la grabación local del mosaico completo como un solo archivo MKV organizados por etiquetas.
 
 Uso:
-    python3 receiver.py --ip 192.168.1.XX
-    python3 receiver.py --ip 192.168.1.XX --port 1043
+    python3 client.py --ip 192.168.1.XX
+    python3 client.py --ip 192.168.1.XX --port 1043
 """
 
 import os
@@ -20,7 +20,7 @@ import threading
 import argparse
 import cv2
 
-from stego_decoder_receiver import VideoReceiver
+from stego_decoder_receiver import VideoReceiver as VideoClient
 from recorder import VideoRecorder
 from gui import GUI
 from config import UDP_PORT_BASE
@@ -38,15 +38,15 @@ def _handle_signal(signum, frame) -> None:
 def main() -> None:
     global _running
 
-    parser = argparse.ArgumentParser(description="Receptor RTP - RealSense D435")
-    parser.add_argument("--ip", required=True, help="IP del emisor (Jetson / PC con cámara)")
+    parser = argparse.ArgumentParser(description="Cliente RTP - RealSense D435")
+    parser.add_argument("--ip", required=True, help="IP del servidor (Jetson / PC con cámara)")
     parser.add_argument("--port", type=int, default=UDP_PORT_BASE, help="Puerto UDP base")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    receiver = None
+    client = None
     gui = None
     recorder = None
     history_manager = None
@@ -54,22 +54,22 @@ def main() -> None:
     show_dashboard = False
 
     try:
-        receiver = VideoReceiver(sender_ip=args.ip, port_base=args.port)
-        receiver.start()
+        client = VideoClient(sender_ip=args.ip, port_base=args.port)
+        client.start()
 
         gui = GUI()
         recorder = VideoRecorder()
         history_manager = TelemetryHistoryManager()
         chart_renderer = TelemetryChartRenderer()
 
-        print(f"Receptor conectando al emisor {args.ip}:{args.port}. "
-              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar, 'D' para Dashboard de consumo, 'Q' para salir.")
+        print(f"Cliente conectando al servidor {args.ip}:{args.port}. "
+              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar por etiquetas, 'D' para Dashboard de consumo, 'Q' para salir.")
 
         while _running:
-            frames = receiver.get_frames()
-            stats = receiver.get_stats()
-            sync_info = receiver.get_sync_info()
-            telemetry = receiver.get_telemetry()
+            frames = client.get_frames()
+            stats = client.get_stats()
+            sync_info = client.get_sync_info()
+            telemetry = client.get_telemetry()
 
             # Guardar telemetría y consumo de potencia en el historial
             if telemetry:
@@ -167,18 +167,18 @@ def main() -> None:
                 break
 
     except Exception as e:
-        print(f"Error en Receptor: {e}", file=sys.stderr)
+        print(f"Error en Cliente: {e}", file=sys.stderr)
 
     finally:
         if history_manager:
             history_manager.save_to_file()
         if recorder and recorder.recording:
             recorder.stop()
-        if receiver:
-            receiver.close()
+        if client:
+            client.close()
         if gui:
             gui.destroy()
-        print("Receptor finalizado.")
+        print("Cliente finalizado.")
 
 
 if __name__ == "__main__":
