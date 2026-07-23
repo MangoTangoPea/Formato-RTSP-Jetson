@@ -432,8 +432,8 @@ class GUI:
 
             # 1. Pedir etiqueta con placeholder vacío
             tag = simpledialog.askstring(
-                "Etiqueta de Grabación",
-                "Ingrese la etiqueta para organizar la grabación (ej: prueba1, calibracion):",
+                "Guardar Grabación",
+                "Ingrese la etiqueta para guardar y organizar la grabación (ej: prueba1, calibracion):",
                 initialvalue="",
                 parent=root
             )

@@ -127,8 +127,8 @@ python3 receiver.py --ip 192.168.1.XX --port 1043
 
 | Tecla | Acción |
 | :---: | --- |
-| **`R`** | Pedir **etiqueta** e **iniciar grabación** (crea o asigna la carpeta `./grabaciones/<etiqueta>/`). |
-| **`E`** | **Detener grabación** actual y guardar automáticamente el archivo en su carpeta correspondiente. |
+| **`R`** | **Iniciar grabación** de inmediato. |
+| **`E`** | **Detener grabación** y abrir cuadro de diálogo para ingresar la **etiqueta** que organizará y nombrará el video. |
 | **`D`** | Mostrar / ocultar **Dashboard** de gráficos de consumo energético y telemetría. |
 | **`S`** | Guardar captura de pantalla del Dashboard (si está visible). |
 | **`A`** | Cambiar fecha en el Dashboard de telemetría. |
