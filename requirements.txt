@@ -1,9 +1,61 @@
-# Dependencias de Python para Emisor y Receptor (Ubuntu / Jetson Linux)
-# Instalar con: pip install -r requirements.txt
+# =============================================================================
+# Dependencias Python — Emisor (Jetson) y Receptor (PC)
+# =============================================================================
+#
+# INSTALACIÓN EN PC DE DESARROLLO (x86_64, sin GPU):
+#   pip install -r requirements.txt
+#
+# =============================================================================
+# INSTALACIÓN EN PC CLIENTE con GPU NVIDIA (Workstation Z8 / RTX 4000):
+# =============================================================================
+#
+#   1. Instalar OpenCV con CUDA desde el wheel pre-compilado:
+#      pip uninstall opencv-python -y
+#      pip install opencv-contrib-python-headless   # o usar build con CUDA:
+#      # Alternativa recomendada (wheel con CUDA para Linux x86_64):
+#      pip install opencv-python==4.10.0.84          # CPU (si no hay build CUDA disponible)
+#      # Para OpenCV con CUDA nativo compilar desde fuente:
+#      # https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html
+#      # cmake -DWITH_CUDA=ON -DCUDA_ARCH_BIN=7.5 ..  (RTX 4000 = Turing = sm_75)
+#
+#   2. Instalar CuPy para operaciones numéricas en GPU:
+#      pip install cupy-cuda12x    # CUDA 12.x (RTX 4000 con driver reciente)
+#      pip install cupy-cuda11x    # CUDA 11.x (driver antiguo)
+#      (verificar versión: nvcc --version o nvidia-smi)
+#
+#   3. Resto de dependencias igual que en desarrollo.
+#
+# =============================================================================
+# INSTALACIÓN EN JETSON (JetPack 5.x / 6.x):
+# =============================================================================
+#
+#   1. NO instalar opencv-python desde pip en la Jetson.
+#      JetPack incluye OpenCV con CUDA compilado desde la fuente.
+#      Verificar: python3 -c "import cv2; print(cv2.cuda.getCudaEnabledDeviceCount())"
+#
+#   2. Instalar CuPy:
+#      pip install cupy-cuda12x   # JetPack 6.x (CUDA 12)
+#      pip install cupy-cuda11x   # JetPack 5.x (CUDA 11)
+#
+#   3. Instalar el resto:
+#      pip install numpy>=1.21.0 pyrealsense2
+#
+# =============================================================================
 
+# --- Procesamiento de imágenes (CPU build — para PC de desarrollo sin GPU) ---
+# En Jetson/Z8 con OpenCV-CUDA: omitir y usar el build con soporte CUDA.
 opencv-python>=4.5.0
+
+# --- Cómputo numérico ---
 numpy>=1.21.0
+
+# --- Cámara Intel RealSense D435 (solo en Jetson / PC con cámara conectada) ---
 pyrealsense2
 
-# Nota: En sistemas Ubuntu/Linux para la interfaz gráfica Tkinter del receptor se requiere:
+# --- Aceleración GPU (opcional — Jetson y PC con GPU NVIDIA) ---
+# Descomentar según la versión de CUDA instalada (nvcc --version):
+# cupy-cuda12x   # CUDA 12.x — RTX 4000 (Z8) con driver >=520 | JetPack 6.x
+# cupy-cuda11x   # CUDA 11.x — driver antiguo               | JetPack 5.x
+
+# --- Nota: GUI Tkinter (Receptor en Linux) ---
 # sudo apt install python3-tk libgl1-mesa-glx libglib2.0-0

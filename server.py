@@ -25,6 +25,7 @@ from camera import RealSenseCamera
 from stego_encoder_sender import VideoSender as VideoServer
 from jetson_monitor import JetsonMonitor
 from utils import pack_z16_to_bgr
+from gpu_accel import GPU
 from config import (
     UDP_PORT_BASE, CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FPS,
     CHANNEL_COLOR, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT,
@@ -91,9 +92,12 @@ def main() -> None:
 
         control_port = args.port + CONTROL_PORT_OFFSET
 
+        s = GPU.summary()
         print(f"Servidor escuchando en puerto {args.port} "
               f"(control: {control_port}) | "
               f"{CAMERA_WIDTH}×{CAMERA_HEIGHT} @ {CAMERA_FPS}fps")
+        print(f"[GPU] Decodificación de imagen : {s['opencv_cuda']}")
+        print(f"[GPU] Operaciones numéricas    : {s['cupy']}")
         if bag_path:
             print(f"Grabando en formato .bag (RealSense RAW): {bag_path}")
         print("Esperando cliente...")

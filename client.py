@@ -26,6 +26,7 @@ from gui import GUI
 from config import UDP_PORT_BASE
 from telemetry_history import TelemetryHistoryManager
 from telemetry_charts import TelemetryChartRenderer
+from gpu_accel import GPU
 
 _running: bool = True
 
@@ -62,8 +63,11 @@ def main() -> None:
         history_manager = TelemetryHistoryManager()
         chart_renderer = TelemetryChartRenderer()
 
-        print(f"Cliente conectando al servidor {args.ip}:{args.port}. "
-              f"Presione 'R' para iniciar grabación, 'E' para detener y guardar por etiquetas, 'D' para Dashboard de consumo, 'Q' para salir.")
+        s = GPU.summary()
+        print(f"Cliente conectando al servidor {args.ip}:{args.port}.")
+        print(f"[GPU] Decodificación de imagen : {s['opencv_cuda']}")
+        print(f"[GPU] Operaciones numéricas    : {s['cupy']}")
+        print("Presione 'R' para iniciar grabación, 'E' para detener y guardar por etiquetas, 'D' para Dashboard de consumo, 'Q' para salir.")
 
         while _running:
             frames = client.get_frames()

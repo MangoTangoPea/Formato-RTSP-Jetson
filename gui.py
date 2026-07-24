@@ -15,7 +15,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from utils import formatear_timestamp_ns, unpack_bgr_to_z16
+from utils import formatear_timestamp_ns
+from gpu_accel import GPU
 from config import (
     CAMERA_WIDTH, CAMERA_HEIGHT, PANEL_HEIGHT,
     MOSAIC_WIDTH, MOSAIC_HEIGHT,
@@ -292,19 +293,19 @@ class GUI:
                     if for_recording:
                         img = f.copy()
                     else:
-                        z16 = unpack_bgr_to_z16(f)
-                        depth_8bit = cv2.convertScaleAbs(z16, alpha=0.03)
-                        img = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
+                        z16 = GPU.unpack_bgr_to_z16(f)
+                        depth_8bit = GPU.convert_scale_abs(z16, alpha=0.03)
+                        img = GPU.apply_colormap(depth_8bit, cv2.COLORMAP_JET)
                 else:
                     img = f.copy()
                     if img.ndim == 2:
-                        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                        img = GPU.cvt_color(img, cv2.COLOR_GRAY2BGR)
 
                 if not for_recording and img.shape[0] > 2 and img.shape[1] >= 256:
                     img[0:2, 0:256] = img[2:3, 0:256]
 
                 if img.shape[:2] != (CAMERA_HEIGHT, CAMERA_WIDTH):
-                    img = cv2.resize(img, (CAMERA_WIDTH, CAMERA_HEIGHT), interpolation=cv2.INTER_AREA)
+                    img = GPU.resize(img, (CAMERA_WIDTH, CAMERA_HEIGHT), cv2.INTER_AREA)
 
             fps = stats.get(ch_key, {}).get('fps', 0.0)
             fid, ts = sync_info.get(ch_key, (None, None))

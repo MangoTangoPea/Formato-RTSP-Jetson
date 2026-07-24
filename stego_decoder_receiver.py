@@ -25,6 +25,7 @@ from config import (
     UDP_PORT_BASE,
 )
 from steganography import FrameSteganography
+from gpu_accel import GPU
 
 
 class VideoReceiver:
@@ -244,9 +245,9 @@ class VideoReceiver:
                     if i in assembly[frame_id]
                 )
 
-                # Decodificar JPEG
+                # Decodificar JPEG — GPU si cv2.cuda disponible, CPU si no
                 arr = np.frombuffer(full_data, dtype=np.uint8)
-                decoded = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                decoded = GPU.imdecode(arr, cv2.IMREAD_COLOR)
 
                 if decoded is not None:
                     # Extraer metadatos incrustados en los píxeles de la fila 0 (esteganografía)
