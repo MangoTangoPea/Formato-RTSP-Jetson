@@ -127,35 +127,4 @@ class FrameSteganography:
         except struct.error:
             return None
 
-    # Métodos estáticos de conveniencia
-    @classmethod
-    def embed_metadata(
-        cls,
-        frame: np.ndarray,
-        frame_id: int,
-        timestamp_ns: int,
-        channel_id: int,
-    ) -> np.ndarray:
-        """Incrusta metadatos usando la configuración por defecto de la clase."""
-        instance = cls()
-        return instance.embed(frame, frame_id, timestamp_ns, channel_id)
 
-    @classmethod
-    def extract_metadata(cls, frame: np.ndarray) -> Optional[Tuple[int, int, int]]:
-        """Extrae metadatos usando la configuración por defecto de la clase."""
-        instance = cls()
-        return instance.extract(frame)
-
-
-# Funciones de envoltura para mantener compatibilidad directa
-def incrustar_metadatos_frame(
-    frame: np.ndarray,
-    frame_id: int,
-    timestamp_ns: int,
-    channel_id: int,
-) -> np.ndarray:
-    return FrameSteganography.embed_metadata(frame, frame_id, timestamp_ns, channel_id)
-
-
-def extraer_metadatos_frame(frame: np.ndarray) -> Optional[Tuple[int, int, int]]:
-    return FrameSteganography.extract_metadata(frame)
