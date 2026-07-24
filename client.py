@@ -94,10 +94,11 @@ def main() -> None:
                 dash_canvas = chart_renderer.render_dashboard(history_manager)
                 cv2.imshow(chart_renderer.window_name, dash_canvas)
 
-            # Escribir frame del mosaico en formato .mkv si se está grabando y el paquete síncrono está completo
+            # Escribir frame del mosaico en formato .mkv con datos Z16 puros si se está grabando
             all_sync = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
             if recorder.recording and all_sync:
-                recorder.write_frame(mosaic)
+                rec_mosaic = gui.build_mosaic(frames, stats, sync_info, telemetry, for_recording=True)
+                recorder.write_frame(rec_mosaic)
 
             # Capturar eventos de teclado
             action = gui.handle_input()

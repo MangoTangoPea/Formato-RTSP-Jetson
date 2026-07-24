@@ -253,24 +253,25 @@ class GUI:
         self,
         frames: dict[str, Optional[np.ndarray]],
         stats: dict[str, dict[str, float | int]],
-        sync_info: dict[str, Tuple[Optional[int], Optional[int]]],
+        sync_info: dict[str, tuple[Optional[int], Optional[int]]],
         telemetry: dict,
+        for_recording: bool = False,
     ) -> np.ndarray:
         """
-        Construye el mosaico completo a resolución nativa: panel superior (rectángulo) + cuadrícula 2x2.
-
-        Este frame se usa tanto para la grabación como base para la visualización.
+        Construye el mosaico visual completo (panel + cuadrícula 2x2).
 
         Parameters
         ----------
         frames : dict
-            Frames de los 4 canales.
+            Frames por canal.
         stats : dict
-            Estadísticas por canal.
+            Estadísticas FPS por canal.
         sync_info : dict
             Info de sincronización por canal.
         telemetry : dict
             Datos de telemetría del emisor.
+        for_recording : bool
+            True si es para grabación MKV (preserva la matriz Z16 puros empaquetados).
 
         Returns
         -------
@@ -288,20 +289,20 @@ class GUI:
                 img = crear_placeholder(CAMERA_WIDTH, CAMERA_HEIGHT, f"Esperando {title}...")
             else:
                 if ch_key == 'depth':
-                    # Reconstruir datos uint16 y generar JET heatmap dinámico para la interfaz
-                    z16 = unpack_bgr_to_z16(f)
-                    depth_8bit = cv2.convertScaleAbs(z16, alpha=0.03)
-                    img = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
+                    if for_recording:
+                        img = f.copy()
+                    else:
+                        z16 = unpack_bgr_to_z16(f)
+                        depth_8bit = cv2.convertScaleAbs(z16, alpha=0.03)
+                        img = cv2.applyColorMap(depth_8bit, cv2.COLORMAP_JET)
                 else:
                     img = f.copy()
                     if img.ndim == 2:
                         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-                # Limpieza estética visual: retocar filas 0..1 sobre la franja esteganográfica para video e imagen 100% impecables
-                if img.shape[0] > 2 and img.shape[1] >= 256:
+                if not for_recording and img.shape[0] > 2 and img.shape[1] >= 256:
                     img[0:2, 0:256] = img[2:3, 0:256]
 
-                # Asegurar tamaño correcto
                 if img.shape[:2] != (CAMERA_HEIGHT, CAMERA_WIDTH):
                     img = cv2.resize(img, (CAMERA_WIDTH, CAMERA_HEIGHT), interpolation=cv2.INTER_AREA)
 
@@ -311,21 +312,17 @@ class GUI:
             self.draw_hud(img, title, color, fps, fid, ts)
             processed[ch_key] = img
 
-        # Mosaico 2x2 de las 4 cámaras
         top = np.hstack((processed['color'], processed['depth']))
         bottom = np.hstack((processed['ir_left'], processed['ir_right']))
         video_grid = np.vstack((top, bottom))
 
-        # Panel de telemetría superior (rectángulo horizontal completo)
         panel = self._create_info_panel(telemetry, video_grid.shape[1])
 
-        # Mosaico completo: panel (arriba) + cuadrícula 2x2 (abajo)
         mosaic = np.vstack((panel, video_grid))
 
-        if all_present:
+        if all_present and not for_recording:
             self._last_valid_mosaic = mosaic.copy()
-        elif self._last_valid_mosaic is not None:
-            # Si un frame fue borrado por desincronía, mostrar suavemente el último mosaico 100% síncrono
+        elif not for_recording and self._last_valid_mosaic is not None:
             return self._last_valid_mosaic
 
         return mosaic

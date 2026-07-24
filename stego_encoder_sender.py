@@ -20,7 +20,8 @@ import numpy as np
 
 from config import (
     PACKET_MAGIC, HEADER_FORMAT, HEADER_SIZE, MAX_UDP_PAYLOAD,
-    JPEG_QUALITY, CHANNELS, CHANNEL_TELEMETRY,
+    JPEG_QUALITY, PNG_COMPRESSION, LOSSLESS_DEPTH, LOSSLESS_IR,
+    CHANNELS, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT, CHANNEL_TELEMETRY,
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_TIMEOUT,
     UDP_PORT_BASE,
 )
@@ -163,10 +164,21 @@ class VideoSender:
         # Incrustar metadatos en la fila 0 de píxeles (esteganografía binaria 2x2)
         frame_bgr = self._stego.embed(frame_bgr, frame_id, timestamp_ns, channel_id)
 
-        _, encoded = cv2.imencode(
-            '.jpg', frame_bgr,
-            [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
-        )
+        use_png = (channel_id == CHANNEL_DEPTH and LOSSLESS_DEPTH) or \
+                  (channel_id in (CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT) and LOSSLESS_IR)
+
+        if use_png:
+            # Compresión PNG SIN PÉRDIDAS (Lossless) — Nivel 1 (ultra rápido para CPU Jetson)
+            _, encoded = cv2.imencode(
+                '.png', frame_bgr,
+                [cv2.IMWRITE_PNG_COMPRESSION, PNG_COMPRESSION]
+            )
+        else:
+            # Compresión JPEG balanceada para canales convencionales
+            _, encoded = cv2.imencode(
+                '.jpg', frame_bgr,
+                [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
+            )
         data = encoded.tobytes()
 
         # Fragmentar si es necesario

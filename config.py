@@ -65,16 +65,19 @@ CAMERA_HEIGHT: int = 720
 CAMERA_FPS: int = 30
 
 # ===========================================================================
-# TRANSMISIÓN
+# TRANSMISIÓN Y COMPRESIÓN POR CANAL
 # ===========================================================================
 
-JPEG_QUALITY: int = 88  # Calidad JPEG balanceada para 720p HD sin lag
+JPEG_QUALITY: int = 88          # Calidad JPEG balanceada para canales de color (0-100)
+PNG_COMPRESSION: int = 1        # Nivel de compresión PNG (1 = ultra rápido, bajo consumo CPU Jetson)
+LOSSLESS_DEPTH: bool = True     # OBLIGATORIO True: Transmisión PNG sin pérdidas para 0.000 mm de error en Z16
+LOSSLESS_IR: bool = False       # False = JPEG rápido en IR (recomendado en Jetson), True = PNG sin pérdidas (mayor ancho de banda)
 
 # ===========================================================================
 # GRABACIÓN
 # ===========================================================================
 
-RECORD_CODEC: str = 'XVID'
+RECORD_CODEC: str = 'FFV1'  # Codec de video 100% SIN PÉRDIDAS (Lossless Matroska Codec)
 RECORD_EXT: str = '.mkv'
 RECORD_FPS: int = 30
 RECORD_BAG_DIR: str = 'recordings'
