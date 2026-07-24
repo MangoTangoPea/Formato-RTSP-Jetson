@@ -70,7 +70,7 @@ CAMERA_FPS: int = 30
 
 JPEG_QUALITY: int = 88          # Calidad JPEG balanceada para canales de color (0-100)
 PNG_COMPRESSION: int = 1        # Nivel de compresión PNG (1 = ultra rápido, bajo consumo CPU Jetson)
-LOSSLESS_DEPTH: bool = True     # OBLIGATORIO True: Transmisión PNG sin pérdidas para 0.000 mm de error en Z16
+LOSSLESS_DEPTH: bool = False    # False: Transmisión fluida JPEG (evita saturar el socket UDP/VPN y caída de imagen)
 LOSSLESS_IR: bool = False       # False = JPEG rápido en IR (recomendado en Jetson), True = PNG sin pérdidas (mayor ancho de banda)
 
 # ===========================================================================
