@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
 Clase para interfaz con la cámara Intel RealSense D435.
-
-Extraída SIN MODIFICACIONES de realsense_monitor_jetson.py.
-NO MODIFICAR esta clase bajo ninguna circunstancia.
 """
 
 import pyrealsense2 as rs

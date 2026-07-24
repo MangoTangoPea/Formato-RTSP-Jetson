@@ -14,7 +14,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
   4. Infrarrojo Derecho (IR Right)
 - **Registro automático**: El Receptor se registra con el Emisor mediante heartbeats UDP. El Emisor no necesita conocer la IP del receptor de antemano.
 - **Telemetría Jetson en tiempo real**: El emisor transmite las temperaturas de hardware de la Jetson (CPU, GPU, SOC, Board), temperatura ASIC de la cámara, fecha, hora y configuración de la cámara.
-- **Panel lateral de información**: El receptor muestra un panel lateral izquierdo (260px) con toda la telemetría del emisor, replicando el estilo de `realsense_monitor_jetson.py`.
+- **Panel lateral de información**: El receptor muestra un panel lateral izquierdo (260px) con toda la telemetría del emisor.
 - **Interfaz responsive**: La ventana es completamente redimensionable y maximizable. El contenido se escala proporcionalmente sin espacios blancos, sin pérdida de calidad de imagen y con texto legible a cualquier tamaño.
 - **Metadatos de sincronización**: Cada paquete transporta `frame_id`, `timestamp_ns` y `channel_id` en una cabecera binaria de 32 bytes para evitar desfases entre canales.
 - **Grabación exclusiva en el Receptor**:
@@ -32,7 +32,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 
 ```
 .
-├── camera.py                    # Conexión RealSense D435 (RealSenseCamera, sin modificar)
+├── camera.py                    # Conexión RealSense D435 (RealSenseCamera)
 ├── config.py                    # Constantes del protocolo, red, cámara, telemetría y grabación
 ├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos de sincronización
 ├── utils.py                     # Funciones auxiliares de red y formato de timestamps
@@ -43,7 +43,6 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 ├── recorder.py                  # Clase VideoRecorder (escritura asíncrona del mosaico completo)
 ├── gui.py                       # Clase GUI (panel telemetría, mosaico 2x2, responsive, HUD, REC)
 ├── client.py                    # Programa principal del Cliente (remplaza a receiver.py)
-├── realsense_monitor_jetson.py  # Monitor local original (referencia, no modificado)
 ├── requirements.txt             # Dependencias de Python
 └── README.md                    # Documentación del proyecto
 ```
