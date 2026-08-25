@@ -1,30 +1,202 @@
-# Transmisión Multicanal RTP/UDP — Intel RealSense D435
+# 🎥 Transmisión Multicanal RTP/UDP & Grabación DB3 — Intel RealSense D435
 
-Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red UDP/RTP, visualización en tiempo real y grabación multicanal de una cámara **Intel RealSense D435** entre dos computadores con Ubuntu / Jetson Linux.
+Sistema modular Emisor-Receptor de alto rendimiento para la captura, transmisión síncrona por red UDP/RTP, visualización en tiempo real y **grabación multicanal autónoma en base de datos SQLite3 (`.db3`)** con **preservación 100% sin pérdidas del canal de profundidad en 16 bits (`uint16` / Z16)**, optimizado para **NVIDIA Jetson (Orin Nano, Xavier, TX2, Nano)** y PC con Ubuntu Linux / Windows.
 
 ---
 
-## 📌 Características
+## 📸 Vista General del Sistema
 
-- **Conexión RealSense intacta**: Mantiene exactamente la inicialización original de streams (640×480 @ 30 FPS en BGR8, Z16 e Y8).
-- **Transmisión síncrona de 4 canales**:
-  1. Color (RGB)
-  2. Profundidad (Depth Heatmap JET)
-  3. Infrarrojo Izquierdo (IR Left)
-  4. Infrarrojo Derecho (IR Right)
-- **Registro automático**: El Receptor se registra con el Emisor mediante heartbeats UDP. El Emisor no necesita conocer la IP del receptor de antemano.
-- **Telemetría Jetson en tiempo real**: El emisor transmite las temperaturas de hardware de la Jetson (CPU, GPU, SOC, Board), temperatura ASIC de la cámara, fecha, hora y configuración de la cámara.
-- **Panel lateral de información**: El receptor muestra un panel lateral izquierdo (260px) con toda la telemetría del emisor.
-- **Interfaz responsive**: La ventana es completamente redimensionable y maximizable. El contenido se escala proporcionalmente sin espacios blancos, sin pérdida de calidad de imagen y con texto legible a cualquier tamaño.
-- **Metadatos de sincronización**: Cada paquete transporta `frame_id`, `timestamp_ns` y `channel_id` en una cabecera binaria de 32 bytes para evitar desfases entre canales.
-- **Grabación exclusiva en el Receptor**:
-  - Se activa con `R` e interrumpe con `E`.
-  - Cuadro de diálogo para ingresar una **etiqueta personalizada** (ej: `prueba1`, `calibracion`).
-  - Organiza automáticamente los archivos en carpetas creadas con la etiqueta (`./grabaciones/<etiqueta>/`) y nombra los archivos prefijados por dicha etiqueta (`<etiqueta>_<YYYYMMDD_HHMMSS>.mkv`).
-  - Guarda **un solo archivo de video `.mkv`** (Matroska Container, 1540×960) con el panel de telemetría + mosaico completo de las 4 cámaras integradas y metadatos de sincronización esteganografiados en la imagen.
-- **Indicador visual de grabación**: Muestra un aviso de borde rojo y un círculo **REC** parpadeante en tiempo real en la GUI del receptor.
-- **Tolerancia a fallos de red**: Si ocurren pérdidas de paquetes, el receptor continúa sin detenerse. Si el emisor se desconecta, el emisor pausa el envío y espera automáticamente reconexión.
-- **Salida limpia en Emisor**: Logging mínimo sin mensajes largos e innecesarios.
+![Interfaz Receptor Multicanal 2x2](docs/images/multichannel_gui.jpg)
+
+---
+
+## 📌 Características Principales
+
+- **Captura Multicanal HD (1280×720 @ 30 FPS)**:
+  1. 🔴 **Color (RGB / BGR8)**: Video a color de alta definición.
+  2. 🔵 **Profundidad (Depth Z16)**: Matriz nativa `uint16` con precisión milimétrica pura.
+  3. ⚪ **Infrarrojo Izquierdo (IR Left Y8)**: Sensor infrarrojo 1.
+  4. ⚪ **Infrarrojo Derecho (IR Right Y8)**: Sensor infrarrojo 2 con emisor láser estructurado activo.
+- **Registro y Autodescubrimiento Dinámico**: El receptor se registra automáticamente con el emisor mediante *heartbeats* UDP (`RGRQ`). El servidor no requiere conocer la IP del cliente previamente.
+- **Telemetría Jetson en Tiempo Real**: Monitoreo continuo de temperaturas de hardware (CPU, GPU, SOC, Board), sensor ASIC de la cámara, consumo de energía en Vatios (W), fecha y hora.
+- **Grabación 100% Lossless en Base de Datos Única (`.db3`)**:
+  - Almacena todos los canales individuales, telemetría y timestamps en un único archivo SQLite3 (`.db3`) estructurado.
+  - Guarda la profundidad en su formato nativo de 16 bits sin pérdidas por compresión de video.
+  - Organización automática por carpetas y prefijos de etiquetas (`./grabaciones/<etiqueta>/<etiqueta>_<timestamp>.db3`).
+- **Dashboard Interactivo de Telemetría y Potencia**: Ventana flotante con gráficos de líneas de 24 horas para consumo eléctrico y curvas térmicas.
+- **Reproductor y Analizador de Medición (`visualizar.py`)**: Inspección interactiva de distancias en metros y milímetros al pasar el mouse o fijar pines, con modos *Separado 2x2* y *Superpuesto (Alpha Blending)*.
+- **Aceleración por GPU Transparente**: Soporte automático para OpenCV CUDA (`cv2.cuda`) y CuPy (`cupy`) con fallback silencioso a CPU.
+
+---
+
+## 🏗️ Arquitectura del Sistema y Flujo de Datos
+
+```mermaid
+flowchart TD
+    subgraph SENSOR["📷 Sensor Físico"]
+        RS["Intel RealSense D435<br/>(RGB, Z16, IR1, IR2)"]
+    end
+
+    subgraph JETSON["🚀 Servidor Emisor (NVIDIA Jetson / Orin Nano)"]
+        direction TB
+        CAM["camera.py<br/>RealSenseCamera (pyrealsense2)"]
+        MON["jetson_monitor.py<br/>Monitoreo Térmico & Potencia (W)"]
+        Z16_PACK["utils.py / gpu_accel.py<br/>Empaquetado Vectorizado Z16"]
+        STEGO["steganography.py<br/>Esteganografía Fila 0 (Metadatos)"]
+        SENDER["stego_encoder_sender.py<br/>VideoSender (UDP Multi-Socket)"]
+        
+        CAM --> Z16_PACK
+        Z16_PACK --> STEGO
+        STEGO --> SENDER
+        MON --> SENDER
+    end
+
+    subgraph NETWORK["🌐 Red Local UDP / RTP"]
+        direction LR
+        UDP0["Puerto 1043: Color (RGB)"]
+        UDP1["Puerto 1044: Depth (Z16)"]
+        UDP2["Puerto 1045: IR Left"]
+        UDP3["Puerto 1046: IR Right"]
+        UDP11["Puerto 1054: Telemetría JSON"]
+        CTRL["Puerto 1053: Control / Heartbeat"]
+    end
+
+    subgraph CLIENT["💻 PC Cliente / Receptor"]
+        direction TB
+        RCV["stego_decoder_receiver.py<br/>VideoReceiver (Reensamble & Sync Buffer)"]
+        SYNC{"¿4 Canales<br/>Completos?"}
+        GUI_MOD["gui.py<br/>GUI Responsive (Panel + 2x2 HUD)"]
+        DASH["telemetry_charts.py<br/>Dashboard Potencia / Térmico"]
+        REC["recorder.py<br/>VideoRecorder (SQLite3 DB3)"]
+        
+        RCV --> SYNC
+        SYNC -- "Sí (Mismo FID)" --> GUI_MOD
+        SYNC -- "Sí (Mismo FID)" --> REC
+        SYNC -- "No / Desync" --> PURGE["Descarte Automático"]
+        RCV --> DASH
+    end
+
+    subgraph STORAGE["💾 Almacenamiento & Análisis"]
+        DB3[("Archivo Único .db3<br/>(Lossless 16-bit Z16 + Video + Telemetría)")]
+        VIS["visualizar.py<br/>Reproductor & Medición Interactiva"]
+        
+        REC --> DB3
+        DB3 --> VIS
+    end
+
+    RS --> CAM
+    SENDER --> UDP0 & UDP1 & UDP2 & UDP3 & UDP11
+    CTRL -.-> SENDER
+    RCV -.-> CTRL
+    UDP0 & UDP1 & UDP2 & UDP3 & UDP11 --> RCV
+```
+
+---
+
+## 📡 Protocolo de Comunicación y Sincronización
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as 💻 Receptor (client.py)
+    participant E as 🚀 Emisor (server.py)
+
+    Note over R,E: 1. Fase de Registro y Autodescubrimiento
+    loop Cada 2.0 segundos
+        R->>E: Paquete UDP Heartbeat 'RGRQ' (Puerto Base + 10)
+    end
+    E->>E: Registra / Actualiza IP remota del Receptor
+
+    Note over R,E: 2. Transmisión Síncrona de 4 Canales + Telemetría
+    par Transmisión Paralela
+        E->>R: Canal 0: Frame Color (Header RS4C + JPEG Payload)
+        E->>R: Canal 1: Frame Depth Z16 (Header RS4C + Z16 BGR Payload)
+        E->>R: Canal 2: Frame IR Left (Header RS4C + JPEG Payload)
+        E->>R: Canal 3: Frame IR Right (Header RS4C + JPEG Payload)
+        E->>R: Canal 11: Telemetría Jetson (JSON: Temps, Potencia W, ASIC)
+    end
+
+    Note over R: 3. Validación de Sincronía Estricta
+    alt 4 Canales Coinciden en Frame ID
+        R->>R: Entrega frames a GUI y Grabador DB3
+    else Canal Incompleto tras 100ms
+        R->>R: Purgado forzoso de memoria (Cero desfase)
+    end
+
+    Note over R,E: 4. Tolerancia a Fallos
+    opt Pérdida de Conexión (>6 seg sin Heartbeat)
+        E->>E: Pausa transmisión automáticamente esperando reconexión
+    end
+```
+
+---
+
+## 🗄️ Estructura de la Base de Datos Única (`.db3`)
+
+Cada sesión de grabación se almacena en un **único archivo SQLite3 autónomo** (`.db3`):
+
+```mermaid
+erDiagram
+    METADATA {
+        TEXT key PK "Clave de configuración"
+        TEXT value "Valor (Resolución, FPS, Modelo, Formato)"
+    }
+
+    FRAMES {
+        INTEGER frame_id PK "ID secuencial del frame"
+        INTEGER timestamp_ns "Timestamp en nanosegundos (reloj emisor)"
+        TEXT datetime_str "Fecha y hora en formato legible"
+        BLOB color "Imagen RGB comprimida en JPEG de alta fidelidad"
+        BLOB depth_z16 "Matriz uint16 Z16 pura (1280x720 mm) con zlib reversible"
+        BLOB ir_left "Imagen Infrarrojo Izquierdo en JPEG"
+        BLOB ir_right "Imagen Infrarrojo Derecho en JPEG"
+        TEXT telemetry "Diccionario JSON con métricas de hardware Jetson"
+    }
+
+    METADATA ||--o{ FRAMES : "Describe la sesión"
+```
+
+---
+
+## 🔬 Flujo de Profundidad Z16 (16-bit Lossless)
+
+```mermaid
+flowchart LR
+    subgraph CAPTURE["1. Captura RealSense"]
+        RAW["Sensor Z16<br/>Matriz uint16 (mm)"]
+    end
+
+    subgraph ENCODE["2. Transmisión"]
+        PACK["pack_z16_to_bgr()<br/>B = Byte Bajo | G = Byte Alto"]
+        UDP["UDP RTP Stream"]
+    end
+
+    subgraph CLIENT_SIDE["3. Cliente"]
+        UNPACK["unpack_bgr_to_z16()<br/>(High << 8) | Low"]
+        JET["Colormap JET (Visualización)"]
+        ZLIB["Compresión zlib L1"]
+        DB[("Archivo .db3")]
+    end
+
+    subgraph VISUALIZER["4. Visualizador"]
+        READ["Lectura Directa uint16"]
+        METERS["Distancia = uint16 / 1000.0 (m)"]
+        MEASURE["Inspección Milimétrica con Mouse"]
+    end
+
+    RAW --> PACK --> UDP --> UNPACK
+    UNPACK --> JET
+    UNPACK --> ZLIB --> DB
+    DB --> READ --> METERS --> MEASURE
+```
+
+---
+
+## 📊 Dashboard de Telemetría y Consumo Energético
+
+El sistema incluye una ventana flotante interactiva que grafica en tiempo real las curvas de consumo en Vatios y temperaturas del hardware durante 24 horas:
+
+![Dashboard de Telemetría y Potencia](docs/images/telemetry_dashboard.jpg)
 
 ---
 
@@ -32,17 +204,22 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 
 ```
 .
-├── camera.py                    # Conexión RealSense D435 (RealSenseCamera)
-├── config.py                    # Constantes del protocolo, red, cámara, telemetría y grabación
-├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos de sincronización
-├── utils.py                     # Funciones auxiliares de red y formato de timestamps
-├── jetson_monitor.py            # Monitoreo de temperaturas Jetson (CPU, GPU, SOC, Board)
-├── stego_encoder_sender.py     # Transmisión UDP (registro dinámico, esteganografía, compresión, cabeceras)
-├── server.py                    # Programa principal del Servidor (remplaza a sender.py)
-├── stego_decoder_receiver.py   # Recepción UDP (heartbeat, ensamble, extracción esteganográfica, telemetría)
-├── recorder.py                  # Clase VideoRecorder (escritura asíncrona del mosaico completo)
-├── gui.py                       # Clase GUI (panel telemetría, mosaico 2x2, responsive, HUD, REC)
-├── client.py                    # Programa principal del Cliente (remplaza a receiver.py)
+├── camera.py                    # Interfaz pyrealsense2 con la Intel RealSense D435
+├── config.py                    # Parámetros de red, protocolo, resolución y grabación (.db3)
+├── steganography.py             # Esteganografía binaria en píxeles (fila 0) para metadatos
+├── utils.py                     # Utilidades de timestamps y empaquetado de profundidad
+├── jetson_monitor.py            # Monitoreo de temperaturas (CPU, GPU, SOC, Board) y potencia (W)
+├── stego_encoder_sender.py     # Transmisión UDP (registro dinámico, esteganografía, compresión)
+├── server.py                    # Programa principal del Servidor (Jetson / PC con cámara)
+├── stego_decoder_receiver.py   # Recepción UDP (heartbeats, ensamble de fragmentos, sincronización)
+├── recorder.py                  # Grabador asíncrono en base de datos SQLite3 (.db3)
+├── gui.py                       # Interfaz visual responsive (panel superior + mosaico 2x2)
+├── client.py                    # Programa principal del Cliente (PC remoto)
+├── visualizar.py                # Reproductor y analizador interactivo de grabaciones .db3 / .mkv
+├── telemetry_history.py         # Gestión y retención de historial de telemetría (30 días)
+├── telemetry_charts.py          # Renderizador de gráficos de líneas de 24h para el Dashboard
+├── gpu_accel.py                 # Aceleración GPU unificada (OpenCV CUDA / CuPy)
+├── docs/images/                 # Diagramas y capturas visuales del sistema
 ├── requirements.txt             # Dependencias de Python
 └── README.md                    # Documentación del proyecto
 ```
@@ -51,7 +228,7 @@ Sistema modular Emisor-Receptor para la captura, transmisión síncrona por red 
 
 ## ⚙️ Requisitos e Instalación
 
-### 1. Dependencias del Sistema (Ubuntu / Linux Jetson)
+### 1. Dependencias del Sistema (Ubuntu Linux / Jetson)
 
 ```bash
 sudo apt update
@@ -64,206 +241,85 @@ sudo apt install -y python3-pip python3-tk libgl1-mesa-glx libglib2.0-0
 pip install -r requirements.txt
 ```
 
-> **Nota**: `pyrealsense2` debe estar instalado en el equipo **Servidor** que tiene conectada la cámara física Intel RealSense D435.
+> **Nota**: `pyrealsense2` debe estar instalado en el equipo **Servidor** (Jetson o PC) que tiene conectada la cámara Intel RealSense D435 por puerto USB 3.0.
 
 ---
 
-## 🚀 Uso del Sistema
+## 🚀 Guía de Uso
 
-### 1. Ejecutar en el Computador Servidor (Jetson / PC con cámara)
+### 1. Ejecutar en el Servidor (NVIDIA Jetson / PC con cámara)
 
-Conecta la Intel RealSense D435 e inicia el servidor. **No necesita IP del cliente**:
+Conecta la Intel RealSense D435 e inicia el servidor. **No requiere conocer la IP del cliente**:
 
 ```bash
 python3 server.py
 ```
 
-*Grabar transmisión nativa en formato `.bag` (ROS/RealSense):*
-
-```bash
-python3 server.py --record-bag
-# o indicando un nombre de archivo personalizado:
-python3 server.py --record-bag mi_grabacion.bag
-```
-
 *Opcional: cambiar el puerto base UDP (por defecto es 1043):*
-
 ```bash
 python3 server.py --port 1043
 ```
 
-El servidor mostrará:
-```text
-Servidor escuchando en puerto 1043 (control: 1053) | 640×480 @ 30fps
-Esperando cliente...
-```
-
-Cuando un cliente se conecte:
-```text
-Cliente registrado: 192.168.1.50
-Servidor → 192.168.1.50:1043 | 640×480 @ 30fps
-```
-
 ---
 
-### 2. Ejecutar en el Computador Cliente (PC remoto)
+### 2. Ejecutar en el Cliente (PC Remoto)
 
-Inicia el cliente **especificando la IP del servidor**:
+Inicia el cliente especificando la IP de la Jetson:
 
 ```bash
 python3 client.py --ip 192.168.1.XX
 ```
 
-*Si cambiaste el puerto en el servidor, especifícalo aquí también:*
-
-```bash
-python3 client.py --ip 192.168.1.XX --port 1043
-```
-
 ---
 
-## 🎮 Controles de Teclado (Ventana Receptor)
+### 3. Controles de Teclado (Ventana del Receptor)
 
 | Tecla | Acción |
 | :---: | --- |
-| **`R`** | **Iniciar grabación** de inmediato. |
-| **`E`** | **Detener grabación** y abrir cuadro de diálogo para ingresar la **etiqueta** que organizará y nombrará el video. |
-| **`D`** | Mostrar / ocultar **Dashboard** de gráficos de consumo energético y telemetría. |
-| **`S`** | Guardar captura de pantalla del Dashboard (si está visible). |
-| **`A`** | Cambiar fecha en el Dashboard de telemetría. |
-| **`Q`** / **`ESC`** | Salir y cerrar la aplicación de manera limpia. |
-
-> **Nota**: La ventana es completamente redimensionable. Maximiza la ventana para ver todo el contenido en alta calidad.
+| **`R`** | **Iniciar grabación** en archivo `.db3` temporal. |
+| **`E`** | **Detener grabación** y abrir diálogo para ingresar la **etiqueta** (`C`, `IA`, `II`, `IR`, `ensayo1`). |
+| **`D`** | Mostrar / ocultar **Dashboard de Telemetría y Potencia**. |
+| **`S`** | Guardar captura de pantalla en PNG del Dashboard. |
+| **`A`** | Navegar fechas anteriores en el Dashboard. |
+| **`Q`** / **`ESC`** | Salir y cerrar la aplicación limpiamente. |
 
 ---
 
-## 🖥️ Interfaz del Receptor
+## 🔍 Reproducción e Inspección de Grabaciones (`visualizar.py`)
 
-La ventana del receptor muestra:
+Para reproducir y analizar grabaciones `.db3` (con precisión milimétrica pura) o `.mkv`:
 
-```
-┌────────────────────────────┬──────────────────────┬──────────────────────┐
-│  Intel RealSense D435      │                      │                      │
-│  ─────────────────────     │        RGB           │       DEPTH          │
-│  Fecha   21/07/2026        │                      │                      │
-│  Hora    15:20:30          │                      │                      │
-│  Resol.  640x480           ├──────────────────────┼──────────────────────┤
-│  Config. 30 FPS            │                      │                      │
-│  ASIC    42.5 C            │      IR LEFT         │      IR RIGHT        │
-│                            │                      │                      │
-│  Jetson                    │                      │                      │
-│  CPU     45.2 C            │                      │                      │
-│  GPU     43.1 C            │                      │                      │
-│  SOC     44.0 C            │                      │                      │
-│  Board   38.5 C            │                      │                      │
-│                            │                      │                      │
-│  Estado: Conectado ●       │                      │                      │
-├────────────────────────────┴──────────────────────┴──────────────────────┤
-│  Controles: [R] Grabar   [E] Detener   [D] Dashboard   [Q] Salir         │
-└──────────────────────────────────────────────────────────────────────────┘
+```bash
+python3 visualizar.py
+# o pasando la ruta del archivo directamente:
+python3 visualizar.py ./grabaciones/ensayo1/ensayo1_20260824_203000.db3
 ```
 
-- **Panel superior horizontal (120px)**: Muestra telemetría del emisor en tiempo real dividida en 4 columnas alineadas.
-- **Mosaico 2x2**: Los 4 canales de la cámara con HUD (FPS, Frame ID, Timestamp).
-- **Barra inferior**: Controles de teclado disponibles.
+### Controles del Reproductor:
+- **`[P]` / `[Espacio]`**: Pausar / Reanudar video.
+- **`[M]`**: Alternar entre **Modo Separado (2x2)** y **Modo Superpuesto (Alpha Blending)**.
+- **`[1] / [2]`**: Regular transparencia del canal de Profundidad en modo superpuesto.
+- **`[3] / [4]`**: Regular transparencia del canal Infrarrojo en modo superpuesto.
+- **`[<-] / [->]`**: Retroceder / Avanzar 1 segundo.
+- **`[Cursor Mouse]`**: Muestra la distancia exacta en metros y milímetros en tiempo real.
+- **`[Clic Izquierdo]`**: Fijar un punto de medición permanente.
+- **`[Clic Derecho]`**: Limpiar marcas de medición.
+- **`[Q] / [ESC]`**: Salir.
 
 ---
 
-## 📂 Estructura de Salida de la Grabación
+## 📂 Organización de Salida de Grabaciones
 
-Al iniciar una grabación ingresando la etiqueta `ensayo_robot`, el sistema genera (o redirige a) la carpeta con dicho nombre dentro de `grabaciones/`, guardando el video con la etiqueta como prefijo inicial:
+Las grabaciones se almacenan automáticamente bajo la estructura:
 
 ```text
 grabaciones/
-└── ensayo_robot/
-    ├── ensayo_robot_20260723_113000.mkv    <-- Video MKV con la etiqueta como prefijo principal
-    └── ensayo_robot_20260723_121500.mkv
+├── C/
+│   └── C_20260824_153000.db3
+├── IA/
+│   └── IA_20260824_161500.db3
+├── II/
+│   └── II_20260824_170000.db3
+└── IR/
+    └── IR_20260824_174500.db3
 ```
-
-### Formato del Nombre del Archivo de Video:
-
-$$\text{Ruta: } \texttt{./grabaciones/}\mathbf{\langle etiqueta \rangle}\texttt{/}\mathbf{\langle etiqueta \rangle}\texttt{\_}\mathbf{\langle YYYYMMDD\_HHMMSS \rangle}\texttt{.mkv}$$
-
-- **`<etiqueta>`**: Etiqueta proporcionada por el usuario al presionar `E` (ej: `C`, `IA`, `II`, `IR`, `prueba1`). Si el usuario deja la casilla en blanco o presiona Enter directamente, se asigna automáticamente la etiqueta `general`.
-- **`<YYYYMMDD_HHMMSS>`**: Timestamp con la fecha y hora exacta en la que dio inicio la grabación.
-- **Contenido Autocontenido Único (.mkv)**: Archivo único Matroska Container (`.mkv`, 1540×960). Cada frame contiene los 4 canales sincronizados, la telemetría y los metadatos esteganografiados en la imagen, **sin requerir archivos externos secundarios**.
-
----
-
-## 🔬 Almacenamiento Sin Pérdidas de Profundidad (16-bit) e Infrarrojos (8-bit)
-
-El sistema empaqueta y conserva los datos sensores puros dentro del archivo único `.mkv`:
-
-1. **Profundidad de 16 Bits (Z16 - Precisión Milimétrica Exacta)**:
-   - Para evitar la pérdida de resolución milimétrica al guardar en video, cada píxel `uint16` de 16 bits se empaqueta en 2 canales BGR sin pérdidas (`B = Byte bajo`, `G = Byte alto`).
-   - Se procesa en la Jetson mediante operaciones vectorizadas NumPy de ultrabaja latencia (**<0.4 ms / <1% CPU**).
-   - Para reconstruir la profundidad exacta en milímetros a partir del archivo `.mkv`:
-     $$\text{Profundidad Z16 (mm)} = (\text{Canal}_G \ll 8) \mid \text{Canal}_B$$
-
-2. **Canales Infrarrojo Izquierdo e Infrarrojo Derecho (8-bit Y8)**:
-   - Los datos infrarrojos nativos de la cámara se conservan en sus **8 bits puros (`Y8`)** con los valores de intensidad del sensor (0-255) dentro del video.
-
-3. **Visualización Humana Dinámica (Cliente)**:
-   - La PC Cliente decodifica dinámicamente el cuadro de 16 bits y renderiza el mapa de calor de colores (*JET*) en tiempo real sobre la pantalla sin cargar la CPU de la Jetson.
-
----
-
-## 📡 Protocolo de Comunicación
-
-### Flujo de Conexión
-
-```
-Receptor ──[REGISTER heartbeat]──> Emisor (puerto control = port_base + 10)
-Emisor ──[UDP frames + telemetría]──> Receptor (IP aprendida del REGISTER)
-```
-
-1. El **Receptor** envía paquetes `REGISTER` (heartbeat) cada 2 segundos al Emisor.
-2. El **Emisor** aprende la IP del receptor y comienza a enviar frames.
-3. Si no recibe heartbeat por 6 segundos, el Emisor pausa el envío sin cerrarse.
-4. Si el receptor se reconecta, la transmisión se reanuda automáticamente.
-
-### Paquete de Registro (REGISTER)
-
-| Offset | Campo | Tipo | Descripción |
-| :---: | --- | :---: | --- |
-| `0..3` | `magic` | 4 bytes | Identificador `RGRQ` |
-
-### Header de Datos (32 bytes)
-
-Cada fragmento de video o telemetría transmitido incluye la siguiente estructura binaria:
-
-| Offset | Campo | Tipo | Descripción |
-| :---: | --- | :---: | --- |
-| `0..3` | `magic` | 4 bytes | Identificador `RS4C` |
-| `4..7` | `frame_id` | uint32 | ID secuencial del frame |
-| `8..15` | `timestamp_ns` | uint64 | Timestamp del reloj emisor (ns) |
-| `16` | `channel_id` | uint8 | Canal: `0`=Color, `1`=Depth, `2`=IR Left, `3`=IR Right, `10`=Telemetría |
-| `17` | `frag_idx` | uint8 | Índice del fragmento |
-| `18` | `frag_total` | uint8 | Cantidad total de fragmentos |
-| `19..31` | `reserved` | 13 bytes | Reservado para uso futuro / alineación |
-
-### Canal de Telemetría (canal 10)
-
-El emisor envía datos de telemetría cada ~1 segundo como un paquete JSON en el canal 10:
-
-```json
-{
-  "jetson_temps": {"CPU": 45.2, "GPU": 43.1, "SOC": 44.0, "Board": 38.5},
-  "asic_temp": 42.5,
-  "date_str": "21/07/2026",
-  "time_str": "15:20:30",
-  "resolution": "640x480",
-  "fps_config": 30,
-  "timestamp": 1753127430.0
-}
-```
-
-### Puertos UDP
-
-| Puerto | Uso |
-| :---: | --- |
-| `port_base + 0` | Canal Color |
-| `port_base + 1` | Canal Depth |
-| `port_base + 2` | Canal IR Left |
-| `port_base + 3` | Canal IR Right |
-| `port_base + 10` | Canal Telemetría / Puerto de Control (REGISTER) |
