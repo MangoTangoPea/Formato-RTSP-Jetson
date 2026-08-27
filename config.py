@@ -77,8 +77,7 @@ LOSSLESS_IR: bool = False       # False = JPEG rápido en IR (recomendado en Jet
 # GRABACIÓN
 # ===========================================================================
 
-RECORD_CODEC: str = 'FFV1'  # Codec de video 100% SIN PÉRDIDAS (Lossless Matroska Codec)
-RECORD_EXT: str = '.mkv'
+RECORD_EXT: str = '.db3'        # Base de datos SQLite3 única con canal de profundidad 16-bit (Z16) puro
 RECORD_FPS: int = 30
 RECORD_BAG_DIR: str = 'recordings'
 

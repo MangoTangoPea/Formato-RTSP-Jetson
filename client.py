@@ -98,11 +98,22 @@ def main() -> None:
                 dash_canvas = chart_renderer.render_dashboard(history_manager)
                 cv2.imshow(chart_renderer.window_name, dash_canvas)
 
-            # Escribir frame del mosaico en formato .mkv con datos Z16 puros si se está grabando
+            # Escribir frame en base de datos .db3 con datos Z16 uint16 puros si se está grabando
             all_sync = all(frames.get(k) is not None for k in ['color', 'depth', 'ir_left', 'ir_right'])
             if recorder.recording and all_sync:
-                rec_mosaic = gui.build_mosaic(frames, stats, sync_info, telemetry, for_recording=True)
-                recorder.write_frame(rec_mosaic)
+                depth_z16 = GPU.unpack_bgr_to_z16(frames['depth'])
+                fid, ts_ns = sync_info.get('color', (None, None))
+                if fid is None:
+                    fid, ts_ns = sync_info.get('depth', (None, None))
+                recorder.write_frame(
+                    color=frames['color'],
+                    depth_z16=depth_z16,
+                    ir_left=frames['ir_left'],
+                    ir_right=frames['ir_right'],
+                    telemetry=telemetry,
+                    frame_id=fid,
+                    timestamp_ns=ts_ns,
+                )
 
             # Capturar eventos de teclado
             action = gui.handle_input()
@@ -112,7 +123,7 @@ def main() -> None:
                 auto_name = f"temp_rec_{timestamp}"
                 auto_dir = os.path.abspath("./grabaciones")
                 if recorder.start(auto_dir, auto_name):
-                    print(f"[REC] Grabación iniciada...")
+                    print(f"[REC] Grabación iniciada (.db3)...")
                 else:
                     print("[ERROR] No se pudo iniciar la grabación", file=sys.stderr)
 
@@ -126,7 +137,7 @@ def main() -> None:
                     tag_info = gui.ask_recording_tag(base_dir="./grabaciones")
                     if tag_info is not None:
                         target_dir, final_name, tag_clean = tag_info
-                        target_path = os.path.join(target_dir, f"{final_name}.mkv")
+                        target_path = os.path.join(target_dir, f"{final_name}.db3")
                         try:
                             os.makedirs(target_dir, exist_ok=True)
                             if os.path.abspath(t_path) != os.path.abspath(target_path):
