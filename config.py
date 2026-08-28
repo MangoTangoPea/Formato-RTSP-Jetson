@@ -19,7 +19,7 @@ PACKET_MAGIC: bytes = b'RS4C'
 #          frag_idx(1) + frag_total(1) + reserved(1) + data_len(4) + reserved2(8)
 HEADER_FORMAT: str = '>4sIQBBBBI8s'
 HEADER_SIZE: int = struct.calcsize(HEADER_FORMAT)  # 32 bytes
-MAX_UDP_PAYLOAD: int = 60000  # bytes por fragmento
+MAX_UDP_PAYLOAD: int = 1200  # 60000bytes por fragmento
 
 # ===========================================================================
 # REGISTRO Y CONTROL (Receptor → Emisor)
