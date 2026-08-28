@@ -120,7 +120,7 @@ class VideoSender:
                 continue
 
             if data[:4] == REGISTER_MAGIC:
-                remote_ip = "10.212.134.105"
+                remote_ip = addr[0]
                 with self._receiver_lock:
                     was_connected = self._receiver_host is not None
                     self._receiver_host = remote_ip
