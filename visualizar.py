@@ -54,124 +54,21 @@ COLOR_GRAY = (70, 70, 70)
 COLOR_BG_DARK = (20, 20, 20)
 
 
-class DB3Reader:
-    """
-    Lector de alta velocidad para grabaciones en base de datos SQLite3 (.db3).
-    """
-
-    def __init__(self, db3_path: str) -> None:
-        self.db3_path = db3_path
-        if not os.path.exists(db3_path):
-            raise FileNotFoundError(f"No se encontró el archivo: {db3_path}")
-
-        self.conn = sqlite3.connect(f"file:{os.path.abspath(db3_path)}?mode=ro", uri=True)
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
-
-        # Cargar metadatos
-        self.metadata: Dict[str, str] = {}
-        try:
-            self.cursor.execute("SELECT key, value FROM metadata;")
-            for row in self.cursor.fetchall():
-                self.metadata[row["key"]] = row["value"]
-        except sqlite3.Error:
-            pass
-
-        self.width = int(self.metadata.get("width", CAMERA_WIDTH))
-        self.height = int(self.metadata.get("height", CAMERA_HEIGHT))
-        self.fps = float(self.metadata.get("fps", 30.0))
-
-        # Contar frames disponibles
-        self.cursor.execute("SELECT COUNT(*) FROM frames;")
-        self.total_frames = self.cursor.fetchone()[0]
-
-        if self.total_frames == 0:
-            raise RuntimeError(f"La base de datos {db3_path} no contiene frames grabados.")
-
-    def get_frame(self, index: int) -> Dict[str, Any]:
-        """
-        Recupera un frame por su índice (0 .. total_frames - 1).
-        """
-        index = max(0, min(self.total_frames - 1, index))
-        self.cursor.execute("""
-            SELECT frame_id, timestamp_ns, datetime_str, color, depth_z16, ir_left, ir_right, telemetry
-            FROM frames
-            ORDER BY frame_id ASC
-            LIMIT 1 OFFSET ?;
-        """, (index,))
-        row = self.cursor.fetchone()
-        if not row:
-            return {}
-
-        fid = row["frame_id"]
-        ts_ns = row["timestamp_ns"]
-        dt_str = row["datetime_str"]
-
-        # 1. Decodificar Color
-        color_blob = row["color"]
-        if color_blob:
-            color = cv2.imdecode(np.frombuffer(color_blob, dtype=np.uint8), cv2.IMREAD_COLOR)
-        else:
-            color = np.full((self.height, self.width, 3), COLOR_BG_DARK, dtype=np.uint8)
-
-        # 2. Decodificar Profundidad Z16 (uint16 en mm 100% lossless)
-        depth_blob = row["depth_z16"]
-        try:
-            depth_bytes = zlib.decompress(depth_blob)
-        except Exception:
-            depth_bytes = depth_blob  # fallback si no fue comprimido
-
-        depth_z16 = np.frombuffer(depth_bytes, dtype=np.uint16).reshape((self.height, self.width))
-
-        # 3. Decodificar IR Left
-        ir_l_blob = row["ir_left"]
-        if ir_l_blob:
-            ir_left = cv2.imdecode(np.frombuffer(ir_l_blob, dtype=np.uint8), cv2.IMREAD_COLOR)
-        else:
-            ir_left = np.full((self.height, self.width, 3), COLOR_BG_DARK, dtype=np.uint8)
-
-        # 4. Decodificar IR Right
-        ir_r_blob = row["ir_right"]
-        if ir_r_blob:
-            ir_right = cv2.imdecode(np.frombuffer(ir_r_blob, dtype=np.uint8), cv2.IMREAD_COLOR)
-        else:
-            ir_right = np.full((self.height, self.width, 3), COLOR_BG_DARK, dtype=np.uint8)
-
-        # 5. Telemetría
-        telem_str = row["telemetry"]
-        telemetry = {}
-        if telem_str:
-            try:
-                telemetry = json.loads(telem_str)
-            except Exception:
-                pass
-
-        return {
-            "frame_id": fid,
-            "timestamp_ns": ts_ns,
-            "datetime_str": dt_str,
-            "color": color,
-            "depth_z16": depth_z16,
-            "ir_left": ir_left,
-            "ir_right": ir_right,
-            "telemetry": telemetry,
-        }
-
-    def close(self) -> None:
-        try:
-            self.conn.close()
-        except Exception:
-            pass
+try:
+    from visualizar_db3 import DB3Reader
+except ImportError:
+    class DB3Reader:
+        pass
 
 
 class VisualizerPlayer:
     """
-    Reproductor y visualizador interactivo para grabaciones .db3 (y .mkv legacy).
+    Reproductor y visualizador interactivo para grabaciones .db3 / .db.3 (y .mkv legacy).
     """
 
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
-        self.is_db3 = file_path.lower().endswith(".db3")
+        self.is_db3 = file_path.lower().endswith(".db3") or file_path.lower().endswith(".db.3")
 
         if self.is_db3:
             self.db_reader = DB3Reader(file_path)
@@ -596,9 +493,11 @@ class VisualizerPlayer:
 
 
 def seleccionar_archivo_grabacion() -> Optional[str]:
-    """Busca archivos de grabación .db3 y .mkv en el proyecto o despliega un selector GUI."""
+    """Busca archivos de grabación .db3, .db.3 y .mkv en el proyecto o despliega un selector GUI."""
     grabaciones = glob.glob("./grabaciones/**/*.db3", recursive=True) + \
                   glob.glob("./**/*.db3", recursive=True) + \
+                  glob.glob("./grabaciones/**/*.db.3", recursive=True) + \
+                  glob.glob("./**/*.db.3", recursive=True) + \
                   glob.glob("./grabaciones/**/*.mkv", recursive=True) + \
                   glob.glob("./**/*.mkv", recursive=True)
 
