@@ -31,6 +31,19 @@ HEARTBEAT_INTERVAL: float = 2.0       # Segundos entre heartbeats del receptor
 HEARTBEAT_TIMEOUT: float = 6.0        # Segundos sin heartbeat → pausa envío
 
 # ===========================================================================
+# HOLE PUNCHING (Receptor → Emisor, por cada socket de canal)
+# ===========================================================================
+# Paquete corto que el receptor manda de forma CONTINUA hacia cada puerto de
+# canal (video y telemetría) del emisor, usando el mismo socket que escucha
+# esos puertos. El objetivo es que un firewall con estado (FortiGate) vea
+# tráfico saliente reciente en ese puerto/sesión y así permita el tráfico
+# de retorno (los frames reales) sin descartarlo como "no solicitado".
+# No requiere respuesta del emisor: el emisor simplemente descarta/drena
+# estos paquetes (ver _drain_loop en stego_encoder_sender.py).
+PUNCH_MAGIC: bytes = b'PNCH'
+PUNCH_INTERVAL: float = 1.0           # Segundos entre punches (igual de agresivo que el heartbeat)
+
+# ===========================================================================
 # CANALES
 # ===========================================================================
 

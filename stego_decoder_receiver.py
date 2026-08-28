@@ -6,6 +6,13 @@ Se registra con el emisor enviando heartbeats periódicos.
 Escucha en 4 puertos UDP (uno por canal) + 1 puerto de telemetría,
 ensambla fragmentos, decodifica JPEG, y mantiene el frame más
 reciente de cada canal en un buffer thread-safe.
+
+[PATCH hole-punching] Además del heartbeat de control (que ya funcionaba),
+cada socket de canal (video + telemetría) ahora manda de forma CONTINUA un
+paquete corto (PUNCH_MAGIC) hacia el emisor, usando el MISMO socket/puerto
+que está escuchando. Esto busca que un firewall con estado reconozca el
+tráfico de retorno de la Jetson como parte de una sesión activa, en vez de
+descartarlo como tráfico entrante no solicitado.
 """
 
 import json
@@ -22,7 +29,7 @@ from config import (
     PACKET_MAGIC, HEADER_FORMAT, HEADER_SIZE, MAX_UDP_PAYLOAD,
     CHANNELS, CHANNEL_TELEMETRY,
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_INTERVAL,
-    UDP_PORT_BASE,
+    UDP_PORT_BASE, PUNCH_MAGIC, PUNCH_INTERVAL,
 )
 from steganography import FrameSteganography
 from gpu_accel import GPU
@@ -33,8 +40,9 @@ class VideoReceiver:
     Recibe frames de 4 canales RealSense por UDP.
 
     Envía heartbeats al emisor para registrarse. Cada canal tiene
-    un hilo de recepción dedicado. Los frames se decodifican y
-    almacenan en un buffer thread-safe.
+    un hilo de recepción dedicado y un hilo de "punch" continuo
+    (hole-punching) que mantiene la sesión de firewall abierta.
+    Los frames se decodifican y almacenan en un buffer thread-safe.
 
     Parameters
     ----------
@@ -84,7 +92,7 @@ class VideoReceiver:
         self._heartbeat_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     def start(self) -> None:
-        """Inicia la recepción en los 4 canales + telemetría + heartbeat."""
+        """Inicia la recepción en los 4 canales + telemetría + heartbeat + punch."""
         self._running = True
 
         # Hilos de recepción de canales de video
@@ -107,6 +115,16 @@ class VideoReceiver:
             self._threads[f"video_{ch_id}"] = thread
             thread.start()
 
+            # [PATCH] Hilo de punch continuo para este canal
+            punch_thread = threading.Thread(
+                target=self._punch_loop,
+                args=(ch_id,),
+                name=f"Receiver-Punch-{CHANNELS[ch_id]}",
+                daemon=True,
+            )
+            self._threads[f"punch_{ch_id}"] = punch_thread
+            punch_thread.start()
+
         # Hilo de recepción de telemetría
         telemetry_port = self.port_base + CHANNEL_TELEMETRY
         telemetry_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -124,6 +142,16 @@ class VideoReceiver:
         self._threads["telemetry"] = telemetry_thread
         telemetry_thread.start()
 
+        # [PATCH] Hilo de punch continuo para telemetría
+        punch_telem_thread = threading.Thread(
+            target=self._punch_loop,
+            args=(CHANNEL_TELEMETRY,),
+            name="Receiver-Punch-telemetry",
+            daemon=True,
+        )
+        self._threads["punch_telemetry"] = punch_telem_thread
+        punch_telem_thread.start()
+
         # Hilo de heartbeat (registro periódico)
         heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
@@ -132,6 +160,28 @@ class VideoReceiver:
         )
         self._threads["heartbeat"] = heartbeat_thread
         heartbeat_thread.start()
+
+    def _punch_loop(self, channel_id: int) -> None:
+        """
+        [PATCH] Manda PUNCH_MAGIC de forma continua hacia el puerto del emisor
+        correspondiente a este canal, usando el MISMO socket que escucha ese
+        puerto (mismo puerto de origen = puerto de escucha). Se ejecuta cada
+        PUNCH_INTERVAL segundos mientras el receptor esté activo, igual que
+        el heartbeat de control.
+        """
+        sock = self._sockets[channel_id]
+        dest = (self.sender_ip, self.port_base + channel_id)
+
+        while self._running:
+            try:
+                sock.sendto(PUNCH_MAGIC, dest)
+            except OSError:
+                pass
+
+            elapsed = 0.0
+            while self._running and elapsed < PUNCH_INTERVAL:
+                time.sleep(0.2)
+                elapsed += 0.2
 
     def _heartbeat_loop(self) -> None:
         """Envía paquetes de registro al emisor periódicamente."""

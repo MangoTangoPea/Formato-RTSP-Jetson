@@ -6,6 +6,14 @@ Escucha paquetes de registro del receptor para aprender su IP.
 Comprime cada frame (JPEG), construye un header de 32 bytes con
 metadatos de sincronización, fragmenta si es necesario, y envía por
 un socket UDP dedicado por canal.
+
+[PATCH hole-punching] Cada socket de canal (y el de telemetría) ahora se
+bindea a un puerto de origen FIJO (port_base + channel_id), en vez de dejar
+que el SO asigne uno efímero. Esto es indispensable para que el "punch" que
+manda el receptor desde ese mismo puerto fijo (ver stego_decoder_receiver.py)
+sea reconocido por un firewall con estado como la sesión de retorno correcta.
+Como estos sockets ahora también pueden recibir los paquetes de punch, se
+añade un hilo de "drenado" por canal que simplemente los descarta.
 """
 
 import json
@@ -23,7 +31,7 @@ from config import (
     JPEG_QUALITY, PNG_COMPRESSION, LOSSLESS_DEPTH, LOSSLESS_IR,
     CHANNELS, CHANNEL_DEPTH, CHANNEL_IR_LEFT, CHANNEL_IR_RIGHT, CHANNEL_TELEMETRY,
     CONTROL_PORT_OFFSET, REGISTER_MAGIC, HEARTBEAT_TIMEOUT,
-    UDP_PORT_BASE,
+    UDP_PORT_BASE, PUNCH_MAGIC,
 )
 from steganography import FrameSteganography
 
@@ -34,7 +42,8 @@ class VideoSender:
 
     Escucha en un puerto de control para que el receptor se registre.
     Una vez registrado, envía los frames a la dirección del receptor.
-    Cada canal tiene su propio socket UDP y puerto destino.
+    Cada canal tiene su propio socket UDP y puerto destino, ahora bindeado
+    también como puerto de ORIGEN fijo (hole-punching).
 
     Parameters
     ----------
@@ -52,19 +61,48 @@ class VideoSender:
         self._receiver_lock = threading.Lock()
         self._last_heartbeat: float = 0.0
 
-        # Un socket UDP por canal (para enviar)
+        self._running: bool = True
+
+        # Un socket UDP por canal (para enviar Y para drenar punches entrantes)
         self._sockets: dict[int, socket.socket] = {}
         self._locks: dict[int, threading.Lock] = {}
+        self._drain_threads: list[threading.Thread] = []
 
         for ch_id in CHANNELS:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1048576)  # 1MB buffer
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # [PATCH] Puerto de origen FIJO = port_base + channel_id
+            sock.bind(("0.0.0.0", port_base + ch_id))
+            sock.settimeout(1.0)
             self._sockets[ch_id] = sock
             self._locks[ch_id] = threading.Lock()
 
-        # Socket para telemetría
+            t = threading.Thread(
+                target=self._drain_loop,
+                args=(ch_id,),
+                name=f"Sender-Drain-{CHANNELS[ch_id]}",
+                daemon=True,
+            )
+            self._drain_threads.append(t)
+            t.start()
+
+        # Socket para telemetría — también con puerto de origen fijo
         self._telemetry_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._telemetry_socket.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+        self._telemetry_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # [PATCH] Puerto de origen FIJO = port_base + CHANNEL_TELEMETRY
+        self._telemetry_socket.bind(("0.0.0.0", port_base + CHANNEL_TELEMETRY))
+        self._telemetry_socket.settimeout(1.0)
+
+        t_telem = threading.Thread(
+            target=self._drain_loop,
+            args=(CHANNEL_TELEMETRY,),
+            name="Sender-Drain-telemetry",
+            daemon=True,
+        )
+        self._drain_threads.append(t_telem)
+        t_telem.start()
 
         # Socket de control (escucha registros)
         self._control_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -74,7 +112,6 @@ class VideoSender:
         self._control_socket.bind(("0.0.0.0", port_base + CONTROL_PORT_OFFSET))
 
         # Hilo de escucha de registros
-        self._running: bool = True
         self._control_thread = threading.Thread(
             target=self._control_loop,
             name="Sender-Control",
@@ -85,6 +122,24 @@ class VideoSender:
         # Estadísticas
         self.frames_sent: int = 0
         self.bytes_sent: int = 0
+
+    def _drain_loop(self, channel_id: int) -> None:
+        """
+        [PATCH] Lee y descarta los paquetes de punch (PUNCH_MAGIC) que llegan
+        al socket de este canal. No se necesita procesar el contenido: solo
+        alcanza con haber recibido ALGO para que el sistema/firewall registre
+        una sesión activa en ambos sentidos sobre este puerto.
+        """
+        sock = self._sockets.get(channel_id) or self._telemetry_socket
+        while self._running:
+            try:
+                sock.recvfrom(64)
+            except socket.timeout:
+                continue
+            except OSError:
+                if not self._running:
+                    break
+                continue
 
     @property
     def receiver_connected(self) -> bool:
@@ -262,11 +317,15 @@ class VideoSender:
             pass
 
     def close(self) -> None:
-        """Cierra todos los sockets UDP y detiene el hilo de control."""
+        """Cierra todos los sockets UDP y detiene los hilos de control/drenado."""
         self._running = False
 
         if self._control_thread.is_alive():
             self._control_thread.join(timeout=2.0)
+
+        for t in self._drain_threads:
+            if t.is_alive():
+                t.join(timeout=2.0)
 
         for sock in self._sockets.values():
             try:
